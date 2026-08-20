@@ -1,0 +1,6 @@
+{
+  "name": "Alma Dumbo",
+  "description": "Detecção de idiomas, transcrição inteligente e tradução com IA multimodal.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
