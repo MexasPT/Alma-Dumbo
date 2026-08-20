@@ -61,6 +61,7 @@ import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -1007,7 +1008,74 @@ private fun HistoryItemCard(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Footer action buttons
+            // Footer action buttons & Primary Action Row
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Primary Action Buttons Row: SMTP Email & Delete
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Send via SMTP Primary Button
+                Button(
+                    onClick = onSendSmtp,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = LavenderPrimary,
+                        contentColor = DeepPurpleOnPrimary
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(46.dp)
+                        .testTag("smtp_action_button_${record.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Email,
+                        contentDescription = null,
+                        tint = DeepPurpleOnPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "Enviar Email (SMTP)",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = DeepPurpleOnPrimary
+                    )
+                }
+
+                // Delete Record Button
+                OutlinedButton(
+                    onClick = onDelete,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(1.dp, ListeningCoral.copy(alpha = 0.7f)),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = ListeningCoral
+                    ),
+                    modifier = Modifier
+                        .height(46.dp)
+                        .testTag("delete_record_button_${record.id}")
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.DeleteOutline,
+                        contentDescription = null,
+                        tint = ListeningCoral,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Eliminar",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = ListeningCoral
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Secondary expand/collapse & copy/share toolbar
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,

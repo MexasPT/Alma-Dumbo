@@ -61,6 +61,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -113,6 +114,12 @@ fun LiveScreen(
     val fullTranscript by liveManager.fullTranscript.collectAsState()
     val rmsLevel by liveManager.rmsLevel.collectAsState()
     val activeLangCode by liveManager.activeLanguage.collectAsState()
+
+    val ptTranslation by viewModel.livePortugueseTranslation.collectAsState()
+    val isTranslating by viewModel.isLiveTranslating.collectAsState()
+
+    // Display mode: 0 -> Português, 1 -> Original, 2 -> Ambos (Bilingue)
+    var displayMode by remember { mutableIntStateOf(0) }
 
     var hasAudioPermission by remember {
         mutableStateOf(
@@ -193,11 +200,11 @@ fun LiveScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // Language Quick Switch Carousel
         Text(
-            text = "IDIOMA DE ENTRADA:",
+            text = "IDIOMA FALADO (ENTRADA):",
             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, letterSpacing = 1.5.sp),
             color = TextTertiary,
             fontWeight = FontWeight.Bold
@@ -258,7 +265,49 @@ fun LiveScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Display Mode Switcher (Português / Original / Ambos)
+        Surface(
+            color = SophisticatedSurfaceVariant.copy(alpha = 0.6f),
+            shape = RoundedCornerShape(14.dp),
+            border = BorderStroke(1.dp, SophisticatedOutline.copy(alpha = 0.6f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                listOf(
+                    0 to "🇵🇹 Em Português",
+                    1 to "🌐 Original",
+                    2 to "⚡ Bilingue"
+                ).forEach { (mode, label) ->
+                    val isModeSelected = displayMode == mode
+                    Surface(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clip(RoundedCornerShape(10.dp))
+                            .clickable { displayMode = mode },
+                        color = if (isModeSelected) LavenderPrimary else Color.Transparent,
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (isModeSelected) FontWeight.Bold else FontWeight.Medium,
+                            color = if (isModeSelected) DeepPurpleOnPrimary else TextSecondary,
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(vertical = 7.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Main Live Transcript Display Box
         Card(
@@ -273,7 +322,7 @@ fun LiveScreen(
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(18.dp)
+                    .padding(16.dp)
             ) {
                 // Header inside Card
                 Row(
@@ -292,21 +341,40 @@ fun LiveScreen(
                             modifier = Modifier.size(18.dp)
                         )
                         Text(
-                            text = "Fluxo Contínuo de Fala",
+                            text = when (displayMode) {
+                                0 -> "Tradução em Português (PT)"
+                                1 -> "Texto Falado Original"
+                                else -> "Texto Original & Tradução Portuguesa"
+                            },
                             style = MaterialTheme.typography.titleSmall,
                             color = TextPrimary,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
 
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isTranslating) {
+                            Text(
+                                text = "A traduzir...",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                color = GlowLavender
+                            )
+                        }
+
                         IconButton(
                             onClick = {
-                                val textToCopy = fullTranscript.ifBlank { partialText }
+                                val textToCopy = when (displayMode) {
+                                    0 -> ptTranslation.ifBlank { fullTranscript.ifBlank { partialText } }
+                                    1 -> fullTranscript.ifBlank { partialText }
+                                    else -> "ORIGINAL:\n${fullTranscript.ifBlank { partialText }}\n\nTRADUÇÃO (PT):\n$ptTranslation"
+                                }
                                 if (textToCopy.isNotBlank()) {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     clipboard.setPrimaryClip(ClipData.newPlainText("Alma Dumbo Live", textToCopy))
-                                    Toast.makeText(context, "Transcrição copiada!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Texto copiado!", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             modifier = Modifier.size(32.dp)
@@ -322,6 +390,7 @@ fun LiveScreen(
                         IconButton(
                             onClick = {
                                 liveManager.clearTranscript()
+                                viewModel.translateLiveTranscript("")
                             },
                             modifier = Modifier.size(32.dp)
                         ) {
@@ -335,12 +404,12 @@ fun LiveScreen(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
                 // Waveform level indicator when listening
                 if (isListening) {
                     LiveAudioLevelBar(rmsLevel = rmsLevel)
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(10.dp))
                 }
 
                 // Scrollable text area
@@ -352,7 +421,9 @@ fun LiveScreen(
                         .padding(14.dp)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    if (fullTranscript.isBlank() && partialText.isBlank()) {
+                    val hasAnyContent = fullTranscript.isNotBlank() || partialText.isNotBlank() || ptTranslation.isNotBlank()
+
+                    if (!hasAnyContent) {
                         Column(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.Center,
@@ -366,41 +437,120 @@ fun LiveScreen(
                             )
                             Spacer(modifier = Modifier.height(10.dp))
                             Text(
-                                text = if (isListening) "A escutar... Fale agora próximo ao microfone." else "Toque no botão 'Iniciar Escuta' para transcrever em tempo real.",
+                                text = if (isListening) "A escutar... Fale agora próximo ao microfone." else "Toque no botão 'Iniciar Escuta' para transcrever e traduzir em direto para Português.",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = TextSecondary,
                                 textAlign = TextAlign.Center
                             )
                         }
                     } else {
-                        Column {
-                            if (fullTranscript.isNotBlank()) {
-                                Text(
-                                    text = fullTranscript,
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontFamily = FontFamily.Serif,
-                                        fontSize = 17.sp,
-                                        lineHeight = 26.sp
-                                    ),
-                                    color = TextPrimary
-                                )
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            // Mode 0: Only Portuguese Translation
+                            if (displayMode == 0) {
+                                if (ptTranslation.isNotBlank()) {
+                                    Text(
+                                        text = ptTranslation,
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontFamily = FontFamily.Serif,
+                                            fontSize = 17.sp,
+                                            lineHeight = 26.sp
+                                        ),
+                                        color = TextPrimary
+                                    )
+                                } else if (fullTranscript.isNotBlank() || partialText.isNotBlank()) {
+                                    // Showing spoken text while translation arrives
+                                    Text(
+                                        text = fullTranscript.ifBlank { partialText },
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontFamily = FontFamily.Serif,
+                                            fontSize = 17.sp,
+                                            lineHeight = 26.sp
+                                        ),
+                                        color = TextSecondary
+                                    )
+                                    Text(
+                                        text = "A gerar tradução em Português...",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = GlowLavender
+                                    )
+                                }
                             }
 
-                            // Partial text streaming
-                            if (partialText.isNotBlank()) {
+                            // Mode 1: Only Original Language
+                            else if (displayMode == 1) {
                                 if (fullTranscript.isNotBlank()) {
-                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Text(
+                                        text = fullTranscript,
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontFamily = FontFamily.Serif,
+                                            fontSize = 17.sp,
+                                            lineHeight = 26.sp
+                                        ),
+                                        color = TextPrimary
+                                    )
                                 }
-                                Text(
-                                    text = partialText,
-                                    style = MaterialTheme.typography.bodyLarge.copy(
-                                        fontFamily = FontFamily.Serif,
-                                        fontSize = 17.sp,
-                                        lineHeight = 26.sp
-                                    ),
-                                    color = GlowLavender,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                if (partialText.isNotBlank()) {
+                                    Text(
+                                        text = partialText,
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontFamily = FontFamily.Serif,
+                                            fontSize = 17.sp,
+                                            lineHeight = 26.sp
+                                        ),
+                                        color = GlowLavender,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            }
+
+                            // Mode 2: Bilingual (Both Original & Portuguese)
+                            else {
+                                // Original Box
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(SophisticatedSurface, RoundedCornerShape(12.dp))
+                                        .border(0.5.dp, SophisticatedOutline, RoundedCornerShape(12.dp))
+                                        .padding(12.dp)
+                                ) {
+                                    Text(
+                                        text = "🌐 IDIOMA ORIGINAL (${activeLangCode.uppercase()}):",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.sp),
+                                        color = TextTertiary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = fullTranscript.ifBlank { partialText.ifBlank { "(A aguardar fala...)" } },
+                                        style = MaterialTheme.typography.bodyMedium.copy(lineHeight = 22.sp),
+                                        color = TextSecondary
+                                    )
+                                }
+
+                                // Portuguese Translation Box
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(LavenderContainer.copy(alpha = 0.35f), RoundedCornerShape(12.dp))
+                                        .border(1.dp, LavenderPrimary.copy(alpha = 0.5f), RoundedCornerShape(12.dp))
+                                        .padding(12.dp)
+                                ) {
+                                    Text(
+                                        text = "🇵🇹 TRADUÇÃO EM PORTUGUÊS:",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, letterSpacing = 1.sp),
+                                        color = LavenderPrimary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = ptTranslation.ifBlank { if (isTranslating) "A traduzir..." else fullTranscript.ifBlank { "(A aguardar tradução...)" } },
+                                        style = MaterialTheme.typography.bodyMedium.copy(
+                                            lineHeight = 22.sp,
+                                            fontWeight = FontWeight.Medium
+                                        ),
+                                        color = TextPrimary
+                                    )
+                                }
                             }
                         }
                     }
@@ -460,12 +610,12 @@ fun LiveScreen(
                     val content = fullTranscript.ifBlank { partialText }
                     if (content.isNotBlank()) {
                         viewModel.saveLiveSession(content, activeLangCode)
-                        Toast.makeText(context, "Sessão Live guardada no Histórico!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Sessão Live guardada com sucesso no Histórico!", Toast.LENGTH_SHORT).show()
                     } else {
                         Toast.makeText(context, "Nenhum texto para guardar.", Toast.LENGTH_SHORT).show()
                     }
                 },
-                enabled = fullTranscript.isNotBlank() || partialText.isNotBlank(),
+                enabled = fullTranscript.isNotBlank() || partialText.isNotBlank() || ptTranslation.isNotBlank(),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = SophisticatedSurfaceVariant,
@@ -481,7 +631,7 @@ fun LiveScreen(
                 Icon(
                     imageVector = Icons.Default.BookmarkAdd,
                     contentDescription = null,
-                    tint = if (fullTranscript.isNotBlank() || partialText.isNotBlank()) LavenderPrimary else TextSecondary,
+                    tint = if (fullTranscript.isNotBlank() || partialText.isNotBlank() || ptTranslation.isNotBlank()) LavenderPrimary else TextSecondary,
                     modifier = Modifier.size(20.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))

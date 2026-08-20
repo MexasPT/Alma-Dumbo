@@ -92,6 +92,61 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
     private val _smtpState = MutableStateFlow<SmtpOperationState>(SmtpOperationState.Idle)
     val smtpState: StateFlow<SmtpOperationState> = _smtpState.asStateFlow()
 
+    // Live Portuguese Translation State
+    private val _livePortugueseTranslation = MutableStateFlow("")
+    val livePortugueseTranslation: StateFlow<String> = _livePortugueseTranslation.asStateFlow()
+
+    private val _isLiveTranslating = MutableStateFlow(false)
+    val isLiveTranslating: StateFlow<Boolean> = _isLiveTranslating.asStateFlow()
+
+    init {
+        // Automatically translate live transcription to Portuguese when text is received
+        viewModelScope.launch {
+            liveSpeechManager.fullTranscript.collect { transcript ->
+                if (transcript.isNotBlank()) {
+                    val lang = liveSpeechManager.activeLanguage.value
+                    if (!lang.startsWith("pt", ignoreCase = true)) {
+                        translateLiveTranscript(transcript, lang)
+                    } else {
+                        _livePortugueseTranslation.value = transcript
+                    }
+                } else {
+                    _livePortugueseTranslation.value = ""
+                }
+            }
+        }
+    }
+
+    fun translateLiveTranscript(text: String, langCode: String? = null) {
+        if (text.isBlank()) {
+            _livePortugueseTranslation.value = ""
+            return
+        }
+        val lang = langCode ?: liveSpeechManager.activeLanguage.value
+        if (lang.startsWith("pt", ignoreCase = true)) {
+            _livePortugueseTranslation.value = text
+            return
+        }
+
+        viewModelScope.launch {
+            _isLiveTranslating.value = true
+            val res = speechService.translateTextToPortuguese(
+                text = text,
+                sourceLang = lang,
+                apiKeyOverride = _customApiKey.value.ifBlank { null }
+            )
+            res.fold(
+                onSuccess = { translated ->
+                    _livePortugueseTranslation.value = translated
+                },
+                onFailure = {
+                    Log.w(TAG, "Live translation failed", it)
+                }
+            )
+            _isLiveTranslating.value = false
+        }
+    }
+
     // Combined Flow for Recordings History
     val recordings: StateFlow<List<TranscriptionEntity>> = combine(
         _searchQuery,
@@ -262,6 +317,18 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
                 ?: SupportedLanguages.findByNameOrCode(langCode)
                 ?: SupportedLanguages.ALL.first()
 
+            var ptTranslation = _livePortugueseTranslation.value
+            if (ptTranslation.isBlank() && !langCode.startsWith("pt", ignoreCase = true)) {
+                val res = speechService.translateTextToPortuguese(
+                    text = transcriptText,
+                    sourceLang = langCode,
+                    apiKeyOverride = _customApiKey.value.ifBlank { null }
+                )
+                ptTranslation = res.getOrDefault("")
+            } else if (langCode.startsWith("pt", ignoreCase = true)) {
+                ptTranslation = transcriptText
+            }
+
             val entity = TranscriptionEntity(
                 title = "Sessão Live - ${meta.namePt} (${formatTimestamp(System.currentTimeMillis())})",
                 audioFilePath = "", // Live text session
@@ -274,7 +341,7 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
                 flagEmoji = meta.flag,
                 confidence = 0.98f,
                 transcription = transcriptText,
-                translationPt = if (meta.code == "pt") transcriptText else "",
+                translationPt = ptTranslation,
                 translationEn = "",
                 summary = "Transcrição gravada em modo Live (Tempo Real).",
                 keywords = "live, transcrição",

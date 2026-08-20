@@ -186,6 +186,76 @@ class GeminiSpeechService {
         }
     }
 
+    suspend fun translateTextToPortuguese(
+        text: String,
+        sourceLang: String? = null,
+        apiKeyOverride: String? = null
+    ): Result<String> = withContext(Dispatchers.IO) {
+        if (text.isBlank()) return@withContext Result.success("")
+
+        val apiKey = if (!apiKeyOverride.isNullOrBlank()) {
+            apiKeyOverride.trim()
+        } else {
+            BuildConfig.GEMINI_API_KEY
+        }
+
+        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
+            return@withContext Result.failure(IllegalStateException("Chave da API Gemini não configurada."))
+        }
+
+        try {
+            val prompt = """
+                Traduza com máxima fidelidade e naturalidade o seguinte texto para Português (de Portugal / pt-PT):
+                Texto original:
+                $text
+
+                Responda APENAS com a tradução em português, sem notas, introduções ou aspas adicionais.
+            """.trimIndent()
+
+            val requestJson = JSONObject().apply {
+                put("contents", JSONArray().apply {
+                    put(JSONObject().apply {
+                        put("parts", JSONArray().apply {
+                            put(JSONObject().apply {
+                                put("text", prompt)
+                            })
+                        })
+                    })
+                })
+                put("generationConfig", JSONObject().apply {
+                    put("temperature", 0.2)
+                })
+            }
+
+            val mediaType = "application/json; charset=utf-8".toMediaType()
+            val body = requestJson.toString().toRequestBody(mediaType)
+            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
+            val request = Request.Builder().url(url).post(body).build()
+
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) {
+                return@withContext Result.failure(Exception("HTTP ${response.code}: ${response.message}"))
+            }
+
+            val rawResponse = response.body?.string() ?: ""
+            val root = JSONObject(rawResponse)
+            val candidates = root.optJSONArray("candidates")
+            if (candidates != null && candidates.length() > 0) {
+                val candidate = candidates.getJSONObject(0)
+                val content = candidate.optJSONObject("content")
+                val parts = content?.optJSONArray("parts")
+                if (parts != null && parts.length() > 0) {
+                    val translatedText = parts.getJSONObject(0).optString("text", "").trim()
+                    return@withContext Result.success(translatedText)
+                }
+            }
+            Result.success(text)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error translating text", e)
+            Result.failure(e)
+        }
+    }
+
     private fun parseGeminiResponse(rawResponseBody: String): SpeechAnalysisResult {
         var rawText = ""
         try {
