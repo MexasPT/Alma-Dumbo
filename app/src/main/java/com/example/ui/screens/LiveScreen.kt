@@ -47,7 +47,9 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -361,6 +363,25 @@ fun LiveScreen(
                                 text = "A traduzir...",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                                 color = GlowLavender
+                            )
+                        }
+
+                        // Re-translate button
+                        IconButton(
+                            onClick = {
+                                val currentText = fullTranscript.ifBlank { partialText }
+                                if (currentText.isNotBlank()) {
+                                    viewModel.translateLiveTranscript(currentText, activeLangCode)
+                                    Toast.makeText(context, "A atualizar tradução para Português...", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            modifier = Modifier.size(32.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Translate,
+                                contentDescription = "Traduzir para Português",
+                                tint = if (isTranslating) GlowLavender else LavenderPrimary,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
 

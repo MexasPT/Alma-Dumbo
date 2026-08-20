@@ -99,48 +99,91 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
     private val _isLiveTranslating = MutableStateFlow(false)
     val isLiveTranslating: StateFlow<Boolean> = _isLiveTranslating.asStateFlow()
 
+    private var liveTranslationJob: kotlinx.coroutines.Job? = null
+
     init {
-        // Automatically translate live transcription to Portuguese when text is received
+        // Automatically translate live transcription to Portuguese continuously as speech flows
         viewModelScope.launch {
-            liveSpeechManager.fullTranscript.collect { transcript ->
-                if (transcript.isNotBlank()) {
-                    val lang = liveSpeechManager.activeLanguage.value
-                    if (!lang.startsWith("pt", ignoreCase = true)) {
-                        translateLiveTranscript(transcript, lang)
-                    } else {
-                        _livePortugueseTranslation.value = transcript
-                    }
+            combine(
+                liveSpeechManager.fullTranscript,
+                liveSpeechManager.partialText,
+                liveSpeechManager.activeLanguage
+            ) { full, partial, lang ->
+                Triple(full, partial, lang)
+            }.collect { (full, partial, lang) ->
+                val combinedText = if (full.isNotBlank() && partial.isNotBlank()) {
+                    "$full $partial"
                 } else {
+                    full.ifBlank { partial }
+                }.trim()
+
+                if (combinedText.isBlank()) {
+                    liveTranslationJob?.cancel()
                     _livePortugueseTranslation.value = ""
+                    _isLiveTranslating.value = false
+                    return@collect
+                }
+
+                if (lang.startsWith("pt", ignoreCase = true)) {
+                    liveTranslationJob?.cancel()
+                    _livePortugueseTranslation.value = combinedText
+                    _isLiveTranslating.value = false
+                } else {
+                    // Debounce translation slightly so we don't bombard API on every single syllable
+                    liveTranslationJob?.cancel()
+                    liveTranslationJob = viewModelScope.launch {
+                        _isLiveTranslating.value = true
+                        kotlinx.coroutines.delay(280) // 280ms debounce for natural speech flow
+                        val res = speechService.translateTextToPortuguese(
+                            text = combinedText,
+                            sourceLang = lang,
+                            apiKeyOverride = _customApiKey.value.ifBlank { null }
+                        )
+                        res.fold(
+                            onSuccess = { translated ->
+                                if (translated.isNotBlank()) {
+                                    _livePortugueseTranslation.value = translated
+                                }
+                            },
+                            onFailure = {
+                                Log.w(TAG, "Live translation failed", it)
+                            }
+                        )
+                        _isLiveTranslating.value = false
+                    }
                 }
             }
         }
     }
 
     fun translateLiveTranscript(text: String, langCode: String? = null) {
-        if (text.isBlank()) {
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) {
             _livePortugueseTranslation.value = ""
             return
         }
         val lang = langCode ?: liveSpeechManager.activeLanguage.value
         if (lang.startsWith("pt", ignoreCase = true)) {
-            _livePortugueseTranslation.value = text
+            _livePortugueseTranslation.value = trimmed
             return
         }
 
-        viewModelScope.launch {
+        liveTranslationJob?.cancel()
+        liveTranslationJob = viewModelScope.launch {
             _isLiveTranslating.value = true
             val res = speechService.translateTextToPortuguese(
-                text = text,
+                text = trimmed,
                 sourceLang = lang,
                 apiKeyOverride = _customApiKey.value.ifBlank { null }
             )
             res.fold(
                 onSuccess = { translated ->
-                    _livePortugueseTranslation.value = translated
+                    if (translated.isNotBlank()) {
+                        _livePortugueseTranslation.value = translated
+                    }
                 },
                 onFailure = {
-                    Log.w(TAG, "Live translation failed", it)
+                    Log.w(TAG, "Manual Live translation failed", it)
                 }
             )
             _isLiveTranslating.value = false

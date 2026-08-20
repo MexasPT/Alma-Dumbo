@@ -191,68 +191,168 @@ class GeminiSpeechService {
         sourceLang: String? = null,
         apiKeyOverride: String? = null
     ): Result<String> = withContext(Dispatchers.IO) {
-        if (text.isBlank()) return@withContext Result.success("")
+        val trimmed = text.trim()
+        if (trimmed.isBlank()) return@withContext Result.success("")
 
+        // If source language is already Portuguese, return original text
+        val lang = sourceLang?.lowercase() ?: ""
+        if (lang == "pt" || lang.startsWith("pt-") || lang.startsWith("pt_")) {
+            return@withContext Result.success(trimmed)
+        }
+
+        // TIER 1: Try Gemini API if API key is provided
         val apiKey = if (!apiKeyOverride.isNullOrBlank()) {
             apiKeyOverride.trim()
         } else {
             BuildConfig.GEMINI_API_KEY
         }
 
-        if (apiKey.isBlank() || apiKey == "MY_GEMINI_API_KEY") {
-            return@withContext Result.failure(IllegalStateException("Chave da API Gemini não configurada."))
+        if (apiKey.isNotBlank() && apiKey != "MY_GEMINI_API_KEY") {
+            val geminiResult = tryGeminiTranslation(trimmed, apiKey)
+            if (geminiResult != null && geminiResult.isNotBlank()) {
+                Log.d(TAG, "Translation succeeded via Gemini AI")
+                return@withContext Result.success(geminiResult)
+            }
         }
 
-        try {
-            val prompt = """
-                Traduza com máxima fidelidade e naturalidade o seguinte texto para Português (de Portugal / pt-PT):
-                Texto original:
-                $text
+        // TIER 2: Seamless Google Translate Free Web Endpoint (Zero-config fallback)
+        val googleResult = tryGoogleTranslateEndpoint(trimmed, sourceLang)
+        if (googleResult != null && googleResult.isNotBlank()) {
+            Log.d(TAG, "Translation succeeded via Google Translate endpoint")
+            return@withContext Result.success(googleResult)
+        }
 
-                Responda APENAS com a tradução em português, sem notas, introduções ou aspas adicionais.
-            """.trimIndent()
+        // TIER 3: MyMemory Translation API fallback
+        val myMemoryResult = tryMyMemoryTranslate(trimmed, sourceLang)
+        if (myMemoryResult != null && myMemoryResult.isNotBlank()) {
+            Log.d(TAG, "Translation succeeded via MyMemory endpoint")
+            return@withContext Result.success(myMemoryResult)
+        }
 
-            val requestJson = JSONObject().apply {
-                put("contents", JSONArray().apply {
-                    put(JSONObject().apply {
-                        put("parts", JSONArray().apply {
-                            put(JSONObject().apply {
-                                put("text", prompt)
+        // Final fallback: return original text if all networks fail
+        Log.w(TAG, "All translation endpoints failed, returning original text")
+        Result.success(trimmed)
+    }
+
+    private fun tryGeminiTranslation(text: String, apiKey: String): String? {
+        val modelsToTry = listOf("gemini-3.5-flash", "gemini-2.5-flash", "gemini-flash-latest")
+
+        for (model in modelsToTry) {
+            try {
+                val prompt = """
+                    Traduza com máxima fidelidade e naturalidade o seguinte texto para Português de Portugal (pt-PT):
+                    Texto original:
+                    $text
+
+                    Responda APENAS com a tradução em português, sem notas, introduções ou aspas.
+                """.trimIndent()
+
+                val requestJson = JSONObject().apply {
+                    put("contents", JSONArray().apply {
+                        put(JSONObject().apply {
+                            put("parts", JSONArray().apply {
+                                put(JSONObject().apply {
+                                    put("text", prompt)
+                                })
                             })
                         })
                     })
-                })
-                put("generationConfig", JSONObject().apply {
-                    put("temperature", 0.2)
-                })
-            }
+                    put("generationConfig", JSONObject().apply {
+                        put("temperature", 0.1)
+                    })
+                }
 
-            val mediaType = "application/json; charset=utf-8".toMediaType()
-            val body = requestJson.toString().toRequestBody(mediaType)
-            val url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=$apiKey"
-            val request = Request.Builder().url(url).post(body).build()
+                val mediaType = "application/json; charset=utf-8".toMediaType()
+                val body = requestJson.toString().toRequestBody(mediaType)
+                val url = "https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent?key=$apiKey"
+                val request = Request.Builder().url(url).post(body).build()
+
+                val response = client.newCall(request).execute()
+                if (response.isSuccessful) {
+                    val rawResponse = response.body?.string() ?: ""
+                    val root = JSONObject(rawResponse)
+                    val candidates = root.optJSONArray("candidates")
+                    if (candidates != null && candidates.length() > 0) {
+                        val candidate = candidates.getJSONObject(0)
+                        val content = candidate.optJSONObject("content")
+                        val parts = content?.optJSONArray("parts")
+                        if (parts != null && parts.length() > 0) {
+                            val translatedText = parts.getJSONObject(0).optString("text", "").trim()
+                            if (translatedText.isNotBlank()) {
+                                return translatedText
+                            }
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Gemini translation attempt with $model failed: ${e.message}")
+            }
+        }
+        return null
+    }
+
+    private fun tryGoogleTranslateEndpoint(text: String, sourceLang: String?): String? {
+        return try {
+            val encodedText = java.net.URLEncoder.encode(text, "UTF-8")
+            val sl = if (!sourceLang.isNullOrBlank() && sourceLang.length >= 2) sourceLang.substring(0, 2).lowercase() else "auto"
+            val url = "https://translate.googleapis.com/translate_a/single?client=gtx&sl=$sl&tl=pt&dt=t&q=$encodedText"
+
+            val request = Request.Builder()
+                .url(url)
+                .header("User-Agent", "Mozilla/5.0 (Android; Mobile; rv:109.0)")
+                .get()
+                .build()
 
             val response = client.newCall(request).execute()
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("HTTP ${response.code}: ${response.message}"))
-            }
-
-            val rawResponse = response.body?.string() ?: ""
-            val root = JSONObject(rawResponse)
-            val candidates = root.optJSONArray("candidates")
-            if (candidates != null && candidates.length() > 0) {
-                val candidate = candidates.getJSONObject(0)
-                val content = candidate.optJSONObject("content")
-                val parts = content?.optJSONArray("parts")
-                if (parts != null && parts.length() > 0) {
-                    val translatedText = parts.getJSONObject(0).optString("text", "").trim()
-                    return@withContext Result.success(translatedText)
+            if (response.isSuccessful) {
+                val responseStr = response.body?.string() ?: ""
+                val jsonArray = JSONArray(responseStr)
+                val sentencesArray = jsonArray.optJSONArray(0)
+                if (sentencesArray != null && sentencesArray.length() > 0) {
+                    val sb = StringBuilder()
+                    for (i in 0 until sentencesArray.length()) {
+                        val sentence = sentencesArray.optJSONArray(i)
+                        if (sentence != null && sentence.length() > 0) {
+                            val translatedSegment = sentence.optString(0, "")
+                            sb.append(translatedSegment)
+                        }
+                    }
+                    val result = sb.toString().trim()
+                    if (result.isNotBlank()) return result
                 }
             }
-            Result.success(text)
+            null
         } catch (e: Exception) {
-            Log.e(TAG, "Error translating text", e)
-            Result.failure(e)
+            Log.w(TAG, "Google Translate endpoint failed: ${e.message}")
+            null
+        }
+    }
+
+    private fun tryMyMemoryTranslate(text: String, sourceLang: String?): String? {
+        return try {
+            val encodedText = java.net.URLEncoder.encode(text, "UTF-8")
+            val sl = if (!sourceLang.isNullOrBlank() && sourceLang.length >= 2) sourceLang.substring(0, 2).lowercase() else "autodetect"
+            val url = "https://api.mymemory.translated.net/get?q=$encodedText&langpair=$sl|pt"
+
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .build()
+
+            val response = client.newCall(request).execute()
+            if (response.isSuccessful) {
+                val responseStr = response.body?.string() ?: ""
+                val root = JSONObject(responseStr)
+                val responseData = root.optJSONObject("responseData")
+                val translated = responseData?.optString("translatedText", "")?.trim()
+                if (!translated.isNullOrBlank() && !translated.contains("MYMEMORY WARNING", ignoreCase = true)) {
+                    return translated
+                }
+            }
+            null
+        } catch (e: Exception) {
+            Log.w(TAG, "MyMemory translate failed: ${e.message}")
+            null
         }
     }
 
