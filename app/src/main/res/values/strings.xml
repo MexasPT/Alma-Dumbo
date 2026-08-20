@@ -2,6 +2,7 @@
     <string name="app_name">Alma Dumbo</string>
     <string name="app_tagline">Detetor de Idiomas &amp; Transcritor Multimodal</string>
     <string name="record_tab">Gravar</string>
+    <string name="live_tab">Live</string>
     <string name="history_tab">Histórico</string>
     <string name="languages_tab">Línguas</string>
     <string name="settings_tab">Definições</string>

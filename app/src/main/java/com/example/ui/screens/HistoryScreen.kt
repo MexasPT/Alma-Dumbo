@@ -4,10 +4,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,21 +30,32 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AttachEmail
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -67,23 +78,26 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.audio.SupportedLanguages
 import com.example.data.db.TranscriptionEntity
+import com.example.smtp.SmtpResult
 import com.example.ui.components.AudioPlayerCard
 import com.example.ui.components.LanguageBadge
-import com.example.ui.components.ScriptTag
 import com.example.ui.components.formatDuration
 import com.example.ui.theme.AmberGold
+import com.example.ui.theme.DeepPurpleOnPrimary
+import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.GlowLavender
+import com.example.ui.theme.LavenderContainer
 import com.example.ui.theme.LavenderPrimary
 import com.example.ui.theme.ListeningCoral
 import com.example.ui.theme.SophisticatedBackground
@@ -93,7 +107,9 @@ import com.example.ui.theme.SophisticatedSurfaceVariant
 import com.example.ui.theme.TextPrimary
 import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.TextTertiary
+import com.example.ui.viewmodel.SmtpOperationState
 import com.example.ui.viewmodel.TranscriberViewModel
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -103,14 +119,19 @@ fun HistoryScreen(
     viewModel: TranscriberViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val recordings by viewModel.recordings.collectAsState()
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedLanguageFilter by viewModel.selectedLanguageFilter.collectAsState()
     val showFavoritesOnly by viewModel.showFavoritesOnly.collectAsState()
     val playbackInfo by viewModel.playbackState.collectAsState()
+    val smtpConfig by viewModel.smtpConfig.collectAsState()
+    val smtpState by viewModel.smtpState.collectAsState()
 
     var recordToDelete by remember { mutableStateOf<TranscriptionEntity?>(null) }
     var recordToEdit by remember { mutableStateOf<TranscriptionEntity?>(null) }
+    var recordToSendSmtp by remember { mutableStateOf<TranscriptionEntity?>(null) }
+    var showClearAllDialog by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -123,22 +144,47 @@ fun HistoryScreen(
                 .fillMaxWidth()
                 .padding(horizontal = 18.dp, vertical = 14.dp)
         ) {
-            Column {
-                Text(
-                    text = "BIBLIOTECA & HISTÓRICO",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        letterSpacing = 2.5.sp,
-                        fontSize = 10.sp
-                    ),
-                    color = TextSecondary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Gravações Armazenadas",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "BIBLIOTECA & HISTÓRICO",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            letterSpacing = 2.5.sp,
+                            fontSize = 10.sp
+                        ),
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "Gravações Armazenadas",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                }
+
+                // Clear All Button
+                if (recordings.isNotEmpty()) {
+                    IconButton(
+                        onClick = { showClearAllDialog = true },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(SophisticatedSurfaceVariant, CircleShape)
+                            .border(1.dp, SophisticatedOutline, CircleShape)
+                            .testTag("clear_all_history_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteSweep,
+                            contentDescription = "Limpar Todo o Histórico",
+                            tint = ListeningCoral,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -147,7 +193,7 @@ fun HistoryScreen(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { viewModel.setSearchQuery(it) },
-                placeholder = { Text("Pesquisar nas transcrições, línguas...", color = TextSecondary) },
+                placeholder = { Text("Pesquisar nas transcrições, línguas, moradas...", color = TextSecondary) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Search,
@@ -210,7 +256,8 @@ fun HistoryScreen(
                         onSpeedChange = { viewModel.setPlaybackSpeed(it) },
                         onToggleFavorite = { viewModel.toggleFavorite(record) },
                         onEdit = { recordToEdit = record },
-                        onDelete = { recordToDelete = record }
+                        onDelete = { recordToDelete = record },
+                        onSendSmtp = { recordToSendSmtp = record }
                     )
                 }
 
@@ -221,18 +268,19 @@ fun HistoryScreen(
         }
     }
 
-    // Delete Confirmation Dialog
+    // Delete Single Record Confirmation Dialog
     recordToDelete?.let { record ->
         AlertDialog(
             containerColor = SophisticatedSurface,
             onDismissRequest = { recordToDelete = null },
-            title = { Text("Eliminar Gravação?", color = TextPrimary) },
-            text = { Text("Esta ação apagará a transcrição e o áudio da memória local da aplicação.", color = TextSecondary) },
+            title = { Text("Eliminar Registo?", color = TextPrimary) },
+            text = { Text("Esta ação apagará a transcrição e o respetivo ficheiro de áudio da memória local.", color = TextSecondary) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         viewModel.deleteRecord(record)
                         recordToDelete = null
+                        Toast.makeText(context, "Registo eliminado com sucesso.", Toast.LENGTH_SHORT).show()
                     },
                     modifier = Modifier.testTag("confirm_delete_button")
                 ) {
@@ -242,6 +290,61 @@ fun HistoryScreen(
             dismissButton = {
                 TextButton(onClick = { recordToDelete = null }) {
                     Text("Cancelar", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    // Clear All Records Dialog
+    if (showClearAllDialog) {
+        AlertDialog(
+            containerColor = SophisticatedSurface,
+            onDismissRequest = { showClearAllDialog = false },
+            title = { Text("Limpar Todo o Histórico?", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = { Text("Tem a certeza que deseja eliminar todas as gravações e transcrições guardadas? Esta ação é irreversível.", color = TextSecondary) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearAllHistory()
+                        showClearAllDialog = false
+                        Toast.makeText(context, "Todo o histórico foi limpo.", Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    Text("Limpar Tudo", color = ListeningCoral, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearAllDialog = false }) {
+                    Text("Cancelar", color = TextSecondary)
+                }
+            }
+        )
+    }
+
+    // SMTP Send Dialog
+    recordToSendSmtp?.let { record ->
+        SmtpSendDialog(
+            record = record,
+            defaultRecipient = smtpConfig.defaultRecipient,
+            isSmtpConfigured = smtpConfig.host.isNotBlank(),
+            smtpState = smtpState,
+            onDismiss = { recordToSendSmtp = null },
+            onSend = { targetEmail, includeAudio, includeLocation ->
+                viewModel.sendRecordViaSmtp(
+                    record = record,
+                    recipientEmail = targetEmail,
+                    includeAudio = includeAudio,
+                    includeLocation = includeLocation
+                ) { result ->
+                    when (result) {
+                        is SmtpResult.Success -> {
+                            Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                            recordToSendSmtp = null
+                        }
+                        is SmtpResult.Failure -> {
+                            Toast.makeText(context, "Erro: ${result.errorMessage}", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 }
             }
         )
@@ -261,7 +364,7 @@ fun HistoryScreen(
                     OutlinedTextField(
                         value = editTitle,
                         onValueChange = { editTitle = it },
-                        label = { Text("Título da gravação") },
+                        label = { Text("Título do registo") },
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = LavenderPrimary,
                             unfocusedBorderColor = SophisticatedOutline
@@ -298,6 +401,201 @@ fun HistoryScreen(
             }
         )
     }
+}
+
+@Composable
+private fun SmtpSendDialog(
+    record: TranscriptionEntity,
+    defaultRecipient: String,
+    isSmtpConfigured: Boolean,
+    smtpState: SmtpOperationState,
+    onDismiss: () -> Unit,
+    onSend: (recipient: String, includeAudio: Boolean, includeLocation: Boolean) -> Unit
+) {
+    val context = LocalContext.current
+    var recipientEmail by remember { mutableStateOf(defaultRecipient) }
+    var includeAudio by remember { mutableStateOf(record.audioFilePath.isNotBlank()) }
+    var includeLocation by remember { mutableStateOf(record.locationAddress != null || record.latitude != null) }
+
+    val hasAudioFile = record.audioFilePath.isNotBlank() && File(record.audioFilePath).exists()
+    val isSending = smtpState is SmtpOperationState.Sending
+
+    AlertDialog(
+        containerColor = SophisticatedSurface,
+        onDismissRequest = { if (!isSending) onDismiss() },
+        title = {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Email,
+                    contentDescription = null,
+                    tint = LavenderPrimary,
+                    modifier = Modifier.size(24.dp)
+                )
+                Text(
+                    text = "Enviar via SMTP",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (!isSmtpConfigured) {
+                    Surface(
+                        color = AmberGold.copy(alpha = 0.15f),
+                        border = BorderStroke(1.dp, AmberGold.copy(alpha = 0.5f)),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Text(
+                            text = "Aviso: O servidor SMTP ainda não está configurado. Configure o Host e credenciais na aba 'Definições' -> 'SMTP'.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = AmberGold,
+                            modifier = Modifier.padding(10.dp)
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = recipientEmail,
+                    onValueChange = { recipientEmail = it },
+                    label = { Text("Email do Destinatário") },
+                    placeholder = { Text("exemplo@empresa.com") },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("smtp_recipient_input"),
+                    singleLine = true,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = LavenderPrimary,
+                        unfocusedBorderColor = SophisticatedOutline
+                    )
+                )
+
+                // Attach Audio Option
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(enabled = hasAudioFile) { includeAudio = !includeAudio },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = includeAudio && hasAudioFile,
+                        onCheckedChange = { if (hasAudioFile) includeAudio = it },
+                        enabled = hasAudioFile,
+                        colors = CheckboxDefaults.colors(checkedColor = LavenderPrimary)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Column {
+                        Text(
+                            text = "Anexar ficheiro de áudio original (.m4a)",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (hasAudioFile) TextPrimary else TextTertiary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        if (!hasAudioFile) {
+                            Text(
+                                text = "(Sessão de texto/Live sem ficheiro de áudio)",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextTertiary
+                            )
+                        }
+                    }
+                }
+
+                // Location Option
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { includeLocation = !includeLocation },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = includeLocation,
+                        onCheckedChange = { includeLocation = it },
+                        colors = CheckboxDefaults.colors(checkedColor = LavenderPrimary)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Column {
+                        Text(
+                            text = "Incluir morada e localização no mapa",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        record.locationAddress?.let { addr ->
+                            Text(
+                                text = "📍 $addr",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = TextSecondary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                }
+
+                if (isSending) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            color = LavenderPrimary,
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Text(
+                            text = (smtpState as SmtpOperationState.Sending).message,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = LavenderPrimary
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSend(recipientEmail.trim(), includeAudio && hasAudioFile, includeLocation)
+                },
+                enabled = !isSending && recipientEmail.isNotBlank(),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = LavenderPrimary,
+                    contentColor = DeepPurpleOnPrimary
+                ),
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.testTag("smtp_confirm_send_button")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Send,
+                    contentDescription = null,
+                    tint = DeepPurpleOnPrimary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("Enviar", fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = !isSending
+            ) {
+                Text("Cancelar", color = TextSecondary)
+            }
+        }
+    )
 }
 
 @Composable
@@ -356,7 +654,7 @@ private fun FilterChipsRow(
             )
         )
 
-        // Language chips for common requested languages
+        // Language chips
         SupportedLanguages.ALL.forEach { lang ->
             FilterChip(
                 selected = selectedLanguage == lang.code,
@@ -395,7 +693,8 @@ private fun HistoryItemCard(
     onSpeedChange: (Float) -> Unit,
     onToggleFavorite: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onSendSmtp: () -> Unit
 ) {
     val context = LocalContext.current
     var isExpanded by remember { mutableStateOf(false) }
@@ -414,7 +713,7 @@ private fun HistoryItemCard(
         colors = CardDefaults.cardColors(
             containerColor = SophisticatedSurface
         ),
-        border = androidx.compose.foundation.BorderStroke(
+        border = BorderStroke(
             1.dp,
             if (record.isFavorite) AmberGold.copy(alpha = 0.6f) else SophisticatedOutline
         )
@@ -440,6 +739,21 @@ private fun HistoryItemCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
+                    // Send via SMTP
+                    IconButton(
+                        onClick = onSendSmtp,
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("smtp_button_${record.id}")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Email,
+                            contentDescription = "Enviar por SMTP",
+                            tint = LavenderPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
                     IconButton(
                         onClick = onToggleFavorite,
                         modifier = Modifier.size(36.dp)
@@ -464,14 +778,17 @@ private fun HistoryItemCard(
                         )
                     }
 
+                    // Individual Delete Button
                     IconButton(
                         onClick = onDelete,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier
+                            .size(36.dp)
+                            .testTag("delete_record_${record.id}")
                     ) {
                         Icon(
                             imageVector = Icons.Default.DeleteOutline,
                             contentDescription = "Eliminar",
-                            tint = ListeningCoral.copy(alpha = 0.85f),
+                            tint = ListeningCoral.copy(alpha = 0.9f),
                             modifier = Modifier.size(20.dp)
                         )
                     }
@@ -500,31 +817,78 @@ private fun HistoryItemCard(
                     style = MaterialTheme.typography.labelSmall,
                     color = TextSecondary
                 )
-                Text(
-                    text = "•",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextSecondary
-                )
-                Text(
-                    text = "Duração: ${formatDuration(record.durationMs)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = LavenderPrimary,
-                    fontWeight = FontWeight.Medium
-                )
+                if (record.durationMs > 0) {
+                    Text(
+                        text = "•",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextSecondary
+                    )
+                    Text(
+                        text = "Duração: ${formatDuration(record.durationMs)}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = LavenderPrimary,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
-
-            // Audio Player Component
-            AudioPlayerCard(
-                recordId = record.id,
-                playbackInfo = playbackInfo,
-                onPlayPause = onPlayPause,
-                onSeek = onSeek,
-                onSpeedChange = onSpeedChange
-            )
+            // Location Badge if available
+            record.locationAddress?.let { address ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    color = SophisticatedSurfaceVariant.copy(alpha = 0.5f),
+                    shape = RoundedCornerShape(8.dp),
+                    border = BorderStroke(0.5.dp, SophisticatedOutline.copy(alpha = 0.5f)),
+                    modifier = Modifier.clickable {
+                        if (record.latitude != null && record.longitude != null) {
+                            val mapUri = Uri.parse("https://www.google.com/maps/search/?api=1&query=${record.latitude},${record.longitude}")
+                            context.startActivity(Intent(Intent.ACTION_VIEW, mapUri))
+                        }
+                    }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = GlowLavender,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            text = address,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                            color = TextSecondary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (record.latitude != null) {
+                            Icon(
+                                imageVector = Icons.Default.Map,
+                                contentDescription = "Ver Mapa",
+                                tint = LavenderPrimary,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+                }
+            }
 
             Spacer(modifier = Modifier.height(12.dp))
+
+            // Audio Player Component (if audio exists)
+            if (record.audioFilePath.isNotBlank() && File(record.audioFilePath).exists()) {
+                AudioPlayerCard(
+                    recordId = record.id,
+                    playbackInfo = playbackInfo,
+                    onPlayPause = onPlayPause,
+                    onSeek = onSeek,
+                    onSpeedChange = onSpeedChange
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             // Transcript Snippet or Full Expanded View
             if (!isExpanded) {
@@ -534,7 +898,7 @@ private fun HistoryItemCard(
                         .clip(RoundedCornerShape(16.dp))
                         .clickable { isExpanded = true },
                     color = SophisticatedSurfaceVariant.copy(alpha = 0.5f),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, SophisticatedOutline.copy(alpha = 0.4f))
+                    border = BorderStroke(1.dp, SophisticatedOutline.copy(alpha = 0.4f))
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
                         Text(
@@ -596,7 +960,7 @@ private fun HistoryItemCard(
                             .padding(top = 8.dp),
                         shape = RoundedCornerShape(16.dp),
                         color = SophisticatedSurfaceVariant.copy(alpha = 0.6f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, SophisticatedOutline.copy(alpha = 0.5f))
+                        border = BorderStroke(1.dp, SophisticatedOutline.copy(alpha = 0.5f))
                     ) {
                         Box(modifier = Modifier.padding(16.dp)) {
                             when (selectedTab) {
@@ -674,7 +1038,7 @@ private fun HistoryItemCard(
                                 record.transcription
                             }
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = ClipData.newPlainText("VozLíngua Transcrição", textToCopy)
+                            val clip = ClipData.newPlainText("Alma Dumbo Transcrição", textToCopy)
                             clipboard.setPrimaryClip(clip)
                             Toast.makeText(context, "Copiado para a área de transferência!", Toast.LENGTH_SHORT).show()
                         },
@@ -695,10 +1059,11 @@ private fun HistoryItemCard(
                                 putExtra(
                                     Intent.EXTRA_TEXT,
                                     """
-                                        [VozLíngua - ${record.detectedLanguage} ${record.flagEmoji}]
+                                        [Alma Dumbo - ${record.detectedLanguage} ${record.flagEmoji}]
                                         ${record.transcription}
                                         
                                         ${if (record.translationPt.isNotBlank()) "Tradução:\n" + record.translationPt else ""}
+                                        ${if (record.locationAddress != null) "\nLocalização: " + record.locationAddress else ""}
                                     """.trimIndent()
                                 )
                             }
@@ -758,11 +1123,11 @@ private fun EmptyHistoryView(hasFilters: Boolean) {
             text = if (hasFilters) {
                 "Tente alterar os termos de pesquisa ou remover os filtros de língua."
             } else {
-                "Grave áudios na aba 'Gravar' para detetar o idioma e guardar transcrições com áudio na memória da app."
+                "Grave áudios no menu 'Gravar' ou use a transcrição em tempo real no menu 'Live' para guardar registos com áudio, mapa e envio SMTP."
             },
             style = MaterialTheme.typography.bodyMedium,
             color = TextSecondary,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+            textAlign = TextAlign.Center
         )
     }
 }

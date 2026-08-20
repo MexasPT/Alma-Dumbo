@@ -12,13 +12,13 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.GraphicEq
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Mic
 import androidx.compose.material.icons.outlined.Settings
@@ -41,8 +41,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.ui.screens.HistoryScreen
-import com.example.ui.screens.InfoScreen
 import com.example.ui.screens.LanguagesCatalogScreen
+import com.example.ui.screens.LiveScreen
 import com.example.ui.screens.RecordScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.LavenderContainer
@@ -69,6 +69,14 @@ sealed class Screen(
         testTag = "nav_record"
     )
 
+    object Live : Screen(
+        route = "live",
+        title = "Live",
+        selectedIcon = Icons.Filled.GraphicEq,
+        unselectedIcon = Icons.Outlined.GraphicEq,
+        testTag = "nav_live"
+    )
+
     object History : Screen(
         route = "history",
         title = "Histórico",
@@ -92,14 +100,6 @@ sealed class Screen(
         unselectedIcon = Icons.Outlined.Settings,
         testTag = "nav_settings"
     )
-
-    object Info : Screen(
-        route = "info",
-        title = "Info",
-        selectedIcon = Icons.Filled.Info,
-        unselectedIcon = Icons.Outlined.Info,
-        testTag = "nav_info"
-    )
 }
 
 class MainActivity : ComponentActivity() {
@@ -120,10 +120,10 @@ fun MainApp(
 ) {
     val navItems = listOf(
         Screen.Record,
+        Screen.Live,
         Screen.History,
         Screen.Languages,
-        Screen.Settings,
-        Screen.Info
+        Screen.Settings
     )
 
     var selectedTab by rememberSaveable { mutableIntStateOf(0) }
@@ -181,10 +181,10 @@ fun MainApp(
         ) { tabIndex ->
             when (tabIndex) {
                 0 -> RecordScreen(viewModel = viewModel)
-                1 -> HistoryScreen(viewModel = viewModel)
-                2 -> LanguagesCatalogScreen()
-                3 -> SettingsScreen(viewModel = viewModel)
-                4 -> InfoScreen()
+                1 -> LiveScreen(viewModel = viewModel)
+                2 -> HistoryScreen(viewModel = viewModel)
+                3 -> LanguagesCatalogScreen()
+                4 -> SettingsScreen(viewModel = viewModel)
             }
         }
     }

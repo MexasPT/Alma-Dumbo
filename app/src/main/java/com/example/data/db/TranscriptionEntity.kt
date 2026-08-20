@@ -24,5 +24,8 @@ data class TranscriptionEntity(
     val keywords: String = "",
     val segmentsJson: String = "[]",
     val isFavorite: Boolean = false,
-    val notes: String = ""
+    val notes: String = "",
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val locationAddress: String? = null
 )

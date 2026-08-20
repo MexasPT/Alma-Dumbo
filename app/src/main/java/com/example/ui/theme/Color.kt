@@ -34,3 +34,4 @@ val RecordingRed = ListeningCoral
 val RecordingRedGlow = ListeningCoral
 val WaveformGreen = Color(0xFF80D99D)
 val AmberGold = Color(0xFFFFD56B)
+val EmeraldSuccess = Color(0xFF81C784)

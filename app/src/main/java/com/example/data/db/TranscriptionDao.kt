@@ -22,6 +22,7 @@ interface TranscriptionDao {
            OR transcription LIKE '%' || :query || '%' 
            OR translationPt LIKE '%' || :query || '%' 
            OR detectedLanguage LIKE '%' || :query || '%'
+           OR locationAddress LIKE '%' || :query || '%'
         ORDER BY createdAt DESC
     """)
     fun searchTranscriptions(query: String): Flow<List<TranscriptionEntity>>
@@ -46,6 +47,9 @@ interface TranscriptionDao {
 
     @Query("DELETE FROM transcriptions WHERE id = :id")
     suspend fun deleteById(id: Long)
+
+    @Query("DELETE FROM transcriptions")
+    suspend fun deleteAll()
 
     @Query("UPDATE transcriptions SET isFavorite = :isFavorite WHERE id = :id")
     suspend fun updateFavorite(id: Long, isFavorite: Boolean)
