@@ -78,11 +78,16 @@ class DialogueManager(
     private var shouldKeepListening = false
     private var restartRunnable: Runnable? = null
     private var customApiKey: String? = null
+    private var allowedLanguageCodes: Set<String>? = null
 
     init {
         mainHandler.post {
             initRecognizer()
         }
+    }
+
+    fun setAllowedLanguages(codes: Set<String>?) {
+        allowedLanguageCodes = codes
     }
 
     fun setApiKeyOverride(key: String?) {
@@ -165,7 +170,7 @@ class DialogueManager(
             _status.value = DialogueListeningStatus.Translating
 
             // 1. Language & Speaker Detection
-            val detection = LanguageAutoDetector.detect(spokenText)
+            val detection = LanguageAutoDetector.detect(spokenText, allowedLanguageCodes)
             val isPortuguese = detection.languageCode.startsWith("pt", ignoreCase = true)
 
             val speaker: DialogueSpeaker

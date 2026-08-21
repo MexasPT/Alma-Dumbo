@@ -14,7 +14,7 @@ data class DetectionResult(
 object LanguageAutoDetector {
     private const val TAG = "LanguageAutoDetector"
 
-    fun detect(text: String): DetectionResult {
+    fun detect(text: String, allowedLanguageCodes: Set<String>? = null): DetectionResult {
         val trimmed = text.trim()
         if (trimmed.isBlank()) {
             return DetectionResult(
@@ -28,17 +28,17 @@ object LanguageAutoDetector {
         }
 
         // 1. Check Non-Latin Scripts (High Confidence Direct Match)
-        val nonLatinResult = detectByScript(trimmed)
+        val nonLatinResult = detectByScript(trimmed, allowedLanguageCodes)
         if (nonLatinResult != null) {
             return nonLatinResult
         }
 
         // 2. Lexical & Diacritical Scoring for Latin Scripts
-        val latinResult = detectLatinLanguage(trimmed)
+        val latinResult = detectLatinLanguage(trimmed, allowedLanguageCodes)
         return latinResult
     }
 
-    private fun detectByScript(text: String): DetectionResult? {
+    private fun detectByScript(text: String, allowedLanguageCodes: Set<String>?): DetectionResult? {
         var arabicCount = 0
         var cyrillicCount = 0
         var devanagariCount = 0
@@ -72,122 +72,153 @@ object LanguageAutoDetector {
             }
         }
 
-        val totalLen = text.length.coerceAtLeast(1)
-
-        if (tifinaghCount > 0) {
+        if (tifinaghCount > 0 && isAllowed("ber", allowedLanguageCodes)) {
             return findResult("ber", 0.99f)
         }
-        if (hangulCount > 0) {
+        if (hangulCount > 0 && isAllowed("ko", allowedLanguageCodes)) {
             return findResult("ko", 0.99f)
         }
-        if (japaneseKanaCount > 0) {
+        if (japaneseKanaCount > 0 && isAllowed("ja", allowedLanguageCodes)) {
             return findResult("ja", 0.99f)
         }
-        if (cjkCount > 0) {
+        if (cjkCount > 0 && isAllowed("zh", allowedLanguageCodes)) {
             return findResult("zh", 0.98f)
         }
-        if (devanagariCount > 0) {
+        if (devanagariCount > 0 && isAllowed("hi", allowedLanguageCodes)) {
             return findResult("hi", 0.98f)
         }
-        if (bengaliCount > 0) {
+        if (bengaliCount > 0 && isAllowed("bn", allowedLanguageCodes)) {
             return findResult("bn", 0.98f)
         }
-        if (thaiCount > 0) {
+        if (thaiCount > 0 && isAllowed("th", allowedLanguageCodes)) {
             return findResult("th", 0.98f)
         }
         if (arabicCount > 0) {
-            // Distinguish Urdu vs Arabic
             val hasUrduChars = text.any { it in listOf('ٹ', 'ڈ', 'ڑ', 'ں', 'ے', 'ہ', 'پ', 'چ', 'ژ', 'گ') }
-            return if (hasUrduChars) findResult("ur", 0.96f) else findResult("ar", 0.96f)
+            if (hasUrduChars && isAllowed("ur", allowedLanguageCodes)) {
+                return findResult("ur", 0.96f)
+            }
+            if (isAllowed("ar", allowedLanguageCodes)) {
+                return findResult("ar", 0.96f)
+            }
+            if (isAllowed("ur", allowedLanguageCodes)) {
+                return findResult("ur", 0.90f)
+            }
         }
         if (cyrillicCount > 0) {
-            // Distinguish Ukrainian vs Russian
             val hasUkrainianChars = text.any { it in listOf('і', 'І', 'ї', 'Ї', 'є', 'Є', 'ґ', 'Ґ') }
             val hasRussianChars = text.any { it in listOf('ы', 'Ы', 'э', 'Э', 'ъ', 'Ъ', 'ё', 'Ё') }
-            return if (hasUkrainianChars && !hasRussianChars) {
-                findResult("uk", 0.97f)
-            } else {
-                findResult("ru", 0.95f)
+            if (hasUkrainianChars && !hasRussianChars && isAllowed("uk", allowedLanguageCodes)) {
+                return findResult("uk", 0.97f)
+            }
+            if (isAllowed("ru", allowedLanguageCodes)) {
+                return findResult("ru", 0.95f)
+            }
+            if (isAllowed("uk", allowedLanguageCodes)) {
+                return findResult("uk", 0.95f)
             }
         }
 
         return null
     }
 
-    private fun detectLatinLanguage(text: String): DetectionResult {
+    private fun detectLatinLanguage(text: String, allowedLanguageCodes: Set<String>?): DetectionResult {
         val lower = text.lowercase()
         val tokens = lower.split(Regex("[^\\p{L}]+")).filter { it.isNotBlank() }
 
         // Vietnamese specific diacritics
         val vietnameseChars = setOf('ơ', 'ư', 'ă', 'â', 'ê', 'ô', 'đ', 'ả', 'ã', 'ạ', 'ấ', 'ầ', 'ẩ', 'ẫ', 'ậ', 'ắ', 'ằ', 'ẳ', 'ẵ', 'ặ', 'ế', 'ề', 'ể', 'ễ', 'ệ', 'ố', 'ồ', 'ổ', 'ỗ', 'ộ', 'ớ', 'ờ', 'ở', 'ỡ', 'ợ', 'ứ', 'ừ', 'ử', 'ữ', 'ự')
-        if (lower.any { it in vietnameseChars }) {
+        if (lower.any { it in vietnameseChars } && isAllowed("vi", allowedLanguageCodes)) {
             return findResult("vi", 0.97f)
         }
 
         val scores = mutableMapOf<String, Float>()
 
         // Tamazight keywords in Latin
-        val berWords = setOf("azul", "tanemmirt", "ameddakel", "tudert", "aman", "tamurt", "ihi", "uhu", "amek", "labas", "ansuf", "akud", "agellid")
-        scores["ber"] = tokens.count { it in berWords } * 4.0f
-
-        // Kimbundu keywords
-        val kmbWords = setOf("kiambote", "sakidila", "ngana", "mona", "kimbundu", "wimbu", "ngaxikana", "mukua", "kudya")
-        scores["kmb"] = tokens.count { it in kmbWords } * 4.0f
+        if (isAllowed("ber", allowedLanguageCodes)) {
+            val berWords = setOf("azul", "tanemmirt", "ameddakel", "tudert", "aman", "tamurt", "ihi", "uhu", "amek", "labas", "ansuf", "akud", "agellid")
+            scores["ber"] = tokens.count { it in berWords } * 4.0f
+        }
 
         // Portuguese
-        val ptWords = setOf("olá", "obrigado", "obrigada", "bom", "dia", "tarde", "noite", "como", "está", "estou", "para", "com", "não", "sim", "por", "favor", "muito", "bem", "fazer", "mais", "tempo", "tudo", "você", "nós", "eles", "uma", "um", "das", "dos", "pão", "coração", "música")
-        val ptChars = setOf('ã', 'õ')
-        scores["pt"] = (tokens.count { it in ptWords } * 1.8f) + (lower.count { it in ptChars } * 2.5f)
+        if (isAllowed("pt", allowedLanguageCodes)) {
+            val ptWords = setOf("olá", "obrigado", "obrigada", "bom", "dia", "tarde", "noite", "como", "está", "estou", "para", "com", "não", "sim", "por", "favor", "muito", "bem", "fazer", "mais", "tempo", "tudo", "você", "nós", "eles", "uma", "um", "das", "dos", "pão", "coração", "música")
+            val ptChars = setOf('ã', 'õ')
+            scores["pt"] = (tokens.count { it in ptWords } * 1.8f) + (lower.count { it in ptChars } * 2.5f)
+        }
 
         // Spanish
-        val esWords = setOf("hola", "gracias", "por", "favor", "buenos", "días", "tardes", "noches", "cómo", "estás", "está", "amigo", "familia", "comida", "agua", "trabajo", "ciudad", "mañana", "corazón", "calle", "dinero", "viaje", "pero", "para", "con", "que", "es", "el", "la", "los", "las", "un", "una")
-        val esChars = setOf('ñ', '¿', '¡')
-        scores["es"] = (tokens.count { it in esWords } * 1.8f) + (lower.count { it in esChars } * 3.0f)
+        if (isAllowed("es", allowedLanguageCodes)) {
+            val esWords = setOf("hola", "gracias", "por", "favor", "buenos", "días", "tardes", "noches", "cómo", "estás", "está", "amigo", "familia", "comida", "agua", "trabajo", "ciudad", "mañana", "corazón", "calle", "dinero", "viaje", "pero", "para", "con", "que", "es", "el", "la", "los", "las", "un", "una")
+            val esChars = setOf('ñ', '¿', '¡')
+            scores["es"] = (tokens.count { it in esWords } * 1.8f) + (lower.count { it in esChars } * 3.0f)
+        }
 
         // French
-        val frWords = setOf("bonjour", "bonsoir", "merci", "plaît", "oui", "non", "ami", "famille", "eau", "pain", "temps", "travail", "ville", "nuit", "monde", "cœur", "soleil", "rue", "argent", "voyage", "paix", "avec", "pour", "dans", "vous", "nous", "est", "sont", "les", "des", "une", "le", "la")
-        val frChars = setOf('œ', 'æ', 'è', 'é', 'ê', 'ë', 'à', 'ù')
-        scores["fr"] = (tokens.count { it in frWords } * 1.8f) + (lower.count { it in frChars } * 1.2f)
+        if (isAllowed("fr", allowedLanguageCodes)) {
+            val frWords = setOf("bonjour", "bonsoir", "merci", "plaît", "oui", "non", "ami", "famille", "eau", "pain", "temps", "travail", "ville", "nuit", "monde", "cœur", "soleil", "rue", "argent", "voyage", "paix", "avec", "pour", "dans", "vous", "nous", "est", "sont", "les", "des", "une", "le", "la")
+            val frChars = setOf('œ', 'æ', 'è', 'é', 'ê', 'ë', 'à', 'ù')
+            scores["fr"] = (tokens.count { it in frWords } * 1.8f) + (lower.count { it in frChars } * 1.2f)
+        }
 
         // English
-        val enWords = setOf("hello", "hi", "thank", "you", "thanks", "please", "yes", "no", "friend", "family", "water", "food", "time", "work", "city", "night", "world", "heart", "sun", "street", "money", "journey", "peace", "the", "and", "is", "are", "have", "that", "this", "with", "from", "how", "what", "good", "morning")
-        scores["en"] = tokens.count { it in enWords } * 1.7f
+        if (isAllowed("en", allowedLanguageCodes)) {
+            val enWords = setOf("hello", "hi", "thank", "you", "thanks", "please", "yes", "no", "friend", "family", "water", "food", "time", "work", "city", "night", "world", "heart", "sun", "street", "money", "journey", "peace", "the", "and", "is", "are", "have", "that", "this", "with", "from", "how", "what", "good", "morning")
+            scores["en"] = tokens.count { it in enWords } * 1.7f
+        }
 
         // German
-        val deWords = setOf("hallo", "guten", "tag", "morgen", "abend", "danke", "bitte", "ja", "nein", "freund", "familie", "wasser", "brot", "zeit", "arbeit", "stadt", "nacht", "welt", "herz", "sonne", "straße", "geld", "reise", "frieden", "der", "die", "das", "und", "ist", "nicht", "wir", "sie")
-        val deChars = setOf('ä', 'ö', 'ü', 'ß')
-        scores["de"] = (tokens.count { it in deWords } * 1.8f) + (lower.count { it in deChars } * 2.5f)
+        if (isAllowed("de", allowedLanguageCodes)) {
+            val deWords = setOf("hallo", "guten", "tag", "morgen", "abend", "danke", "bitte", "ja", "nein", "freund", "familie", "wasser", "brot", "zeit", "arbeit", "stadt", "nacht", "welt", "herz", "sonne", "straße", "geld", "reise", "frieden", "der", "die", "das", "und", "ist", "nicht", "wir", "sie")
+            val deChars = setOf('ä', 'ö', 'ü', 'ß')
+            scores["de"] = (tokens.count { it in deWords } * 1.8f) + (lower.count { it in deChars } * 2.5f)
+        }
 
         // Italian
-        val itWords = setOf("ciao", "grazie", "prego", "favore", "buongiorno", "buonasera", "buonanotte", "amico", "famiglia", "acqua", "pane", "tempo", "lavoro", "città", "notte", "mondo", "cuore", "sole", "strada", "denaro", "viaggio", "pace", "come", "stai", "sono", "perché", "molto", "bene")
-        scores["it"] = tokens.count { it in itWords } * 1.8f
+        if (isAllowed("it", allowedLanguageCodes)) {
+            val itWords = setOf("ciao", "grazie", "prego", "favore", "buongiorno", "buonasera", "buonanotte", "amico", "famiglia", "acqua", "pane", "tempo", "lavoro", "città", "notte", "mondo", "cuore", "sole", "strada", "denaro", "viaggio", "pace", "come", "stai", "sono", "perché", "molto", "bene")
+            scores["it"] = tokens.count { it in itWords } * 1.8f
+        }
 
         // Dutch
-        val nlWords = setOf("hallo", "goedemorgen", "goedenavond", "dank", "alstublieft", "ja", "nee", "vriend", "familie", "water", "brood", "tijd", "werk", "stad", "nacht", "wereld", "hart", "zon", "straat", "geld", "reis", "vrede", "het", "de", "een", "en", "van", "ik")
-        scores["nl"] = tokens.count { it in nlWords } * 1.9f
+        if (isAllowed("nl", allowedLanguageCodes)) {
+            val nlWords = setOf("hallo", "goedemorgen", "goedenavond", "dank", "alstublieft", "ja", "nee", "vriend", "familie", "water", "brood", "tijd", "werk", "stad", "nacht", "wereld", "hart", "zon", "straat", "geld", "reis", "vrede", "het", "de", "een", "en", "van", "ik")
+            scores["nl"] = tokens.count { it in nlWords } * 1.9f
+        }
 
         // Croatian
-        val hrWords = setOf("dobar", "dan", "jutro", "večer", "hvala", "molim", "da", "ne", "prijatelj", "obitelj", "voda", "kruh", "vrijeme", "posao", "grad", "noć", "svijet", "srce", "sunce", "ulica", "novac", "putovanje", "mir", "kako", "ste")
-        val hrChars = setOf('č', 'ć', 'ž', 'š', 'đ')
-        scores["hr"] = (tokens.count { it in hrWords } * 2.0f) + (lower.count { it in hrChars } * 2.0f)
+        if (isAllowed("hr", allowedLanguageCodes)) {
+            val hrWords = setOf("dobar", "dan", "jutro", "večer", "hvala", "molim", "da", "ne", "prijatelj", "obitelj", "voda", "kruh", "vrijeme", "posao", "grad", "noć", "svijet", "srce", "sunce", "ulica", "novac", "putovanje", "mir", "kako", "ste")
+            val hrChars = setOf('č', 'ć', 'ž', 'š', 'đ')
+            scores["hr"] = (tokens.count { it in hrWords } * 2.0f) + (lower.count { it in hrChars } * 2.0f)
+        }
 
         // Albanian
-        val sqWords = setOf("përshëndetje", "faleminderit", "ju", "lutem", "po", "jo", "mik", "familje", "ujë", "bukë", "kohë", "punë", "qytet", "natë", "botë", "zemër", "diell", "rrugë", "para", "udhëtim", "paqe", "mirë", "si", "jeni")
-        scores["sq"] = (tokens.count { it in sqWords } * 2.2f) + (lower.count { it == 'ë' } * 2.5f)
+        if (isAllowed("sq", allowedLanguageCodes)) {
+            val sqWords = setOf("përshëndetje", "faleminderit", "ju", "lutem", "po", "jo", "mik", "familje", "ujë", "bukë", "kohë", "punë", "qytet", "natë", "botë", "zemër", "diell", "rrugë", "para", "udhëtim", "paqe", "mirë", "si", "jeni")
+            scores["sq"] = (tokens.count { it in sqWords } * 2.2f) + (lower.count { it == 'ë' } * 2.5f)
+        }
 
         // Danish
-        val daWords = setOf("hej", "godmorgen", "godaften", "tak", "vær", "venlig", "ja", "nej", "ven", "familie", "vand", "brød", "tid", "arbejde", "by", "nat", "verden", "hjerte", "sol", "gade", "penge", "rejse", "fred", "hvordan", "har")
-        val daChars = setOf('æ', 'ø', 'å')
-        scores["da"] = (tokens.count { it in daWords } * 2.0f) + (lower.count { it in daChars } * 2.5f)
+        if (isAllowed("da", allowedLanguageCodes)) {
+            val daWords = setOf("hej", "godmorgen", "godaften", "tak", "vær", "venlig", "ja", "nej", "ven", "familie", "vand", "brød", "tid", "arbejde", "by", "nat", "verden", "hjerte", "sol", "gade", "penge", "rejse", "fred", "hvordan", "har")
+            val daChars = setOf('æ', 'ø', 'å')
+            scores["da"] = (tokens.count { it in daWords } * 2.0f) + (lower.count { it in daChars } * 2.5f)
+        }
 
         // Finnish
-        val fiWords = setOf("hei", "terve", "hyvää", "huomenta", "iltaa", "kiitos", "ole", "hyvä", "kyllä", "ei", "ystävä", "perhe", "vesi", "leipä", "aika", "työ", "kaupunki", "yö", "maailma", "sydän", "aurinko", "katu", "raha", "matka", "rauha", "mitä", "kuuluu")
-        scores["fi"] = tokens.count { it in fiWords } * 2.2f
+        if (isAllowed("fi", allowedLanguageCodes)) {
+            val fiWords = setOf("hei", "terve", "hyvää", "huomenta", "iltaa", "kiitos", "ole", "hyvä", "kyllä", "ei", "ystävä", "perhe", "vesi", "leipä", "aika", "työ", "kaupunki", "yö", "maailma", "sydän", "aurinko", "katu", "raha", "matka", "rauha", "mitä", "kuuluu")
+            scores["fi"] = tokens.count { it in fiWords } * 2.2f
+        }
 
         // Romanian / Moldavian
-        val roWords = setOf("salut", "bună", "ziua", "dimineața", "seara", "mulțumesc", "vă", "rog", "da", "nu", "prieten", "familie", "apă", "pâine", "timp", "muncă", "oraș", "noapte", "lume", "inimă", "soare", "stradă", "bani", "călătorie", "pace", "cum", "ești")
-        val roChars = setOf('ă', 'î', 'ș', 'ț')
-        scores["ro"] = (tokens.count { it in roWords } * 2.0f) + (lower.count { it in roChars } * 2.5f)
+        if (isAllowed("ro", allowedLanguageCodes) || isAllowed("mo", allowedLanguageCodes)) {
+            val roWords = setOf("salut", "bună", "ziua", "dimineața", "seara", "mulțumesc", "vă", "rog", "da", "nu", "prieten", "familie", "apă", "pâine", "timp", "muncă", "oraș", "noapte", "lume", "inimă", "soare", "stradă", "bani", "călătorie", "pace", "cum", "ești")
+            val roChars = setOf('ă', 'î', 'ș', 'ț')
+            val code = if (isAllowed("ro", allowedLanguageCodes)) "ro" else "mo"
+            scores[code] = (tokens.count { it in roWords } * 2.0f) + (lower.count { it in roChars } * 2.5f)
+        }
 
         val bestEntry = scores.maxByOrNull { it.value }
         if (bestEntry != null && bestEntry.value > 1.2f) {
@@ -196,7 +227,13 @@ object LanguageAutoDetector {
         }
 
         // Default if Latin text has few matched stopwords
-        return findResult("pt", 0.60f)
+        val fallbackCode = if (isAllowed("pt", allowedLanguageCodes)) "pt" else (allowedLanguageCodes?.firstOrNull() ?: "pt")
+        return findResult(fallbackCode, 0.60f)
+    }
+
+    private fun isAllowed(code: String, allowedLanguageCodes: Set<String>?): Boolean {
+        if (allowedLanguageCodes.isNullOrEmpty()) return true
+        return allowedLanguageCodes.contains(code)
     }
 
     private fun findResult(code: String, confidence: Float): DetectionResult {

@@ -46,7 +46,7 @@ import com.example.ui.viewmodel.TranscriberViewModel
 
 sealed class DumboSubTab(val index: Int, val title: String, val icon: ImageVector) {
     object Gravar : DumboSubTab(0, "Gravar", Icons.Default.Mic)
-    object Live : DumboSubTab(1, "Live", Icons.Default.GraphicEq)
+    object Escuta : DumboSubTab(1, "Escuta", Icons.Default.GraphicEq)
     object Dialogo : DumboSubTab(2, "Diálogo", Icons.Default.RecordVoiceOver)
 }
 
@@ -56,7 +56,7 @@ fun DumboContainerScreen(
     modifier: Modifier = Modifier
 ) {
     var selectedSubTabIndex by rememberSaveable { mutableIntStateOf(0) }
-    val tabs = listOf(DumboSubTab.Gravar, DumboSubTab.Live, DumboSubTab.Dialogo)
+    val tabs = listOf(DumboSubTab.Gravar, DumboSubTab.Escuta, DumboSubTab.Dialogo)
 
     Column(
         modifier = modifier

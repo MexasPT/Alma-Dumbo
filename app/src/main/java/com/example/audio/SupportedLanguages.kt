@@ -204,16 +204,6 @@ object SupportedLanguages {
             sampleGreeting = "Salut! Cum ești?"
         ),
         LanguageMeta(
-            code = "kmb",
-            namePt = "Kimbundu (Quimbundo)",
-            nativeName = "Kimbundu",
-            flag = "🇦🇴",
-            family = "Banto (Níger-Congo)",
-            script = "Latino",
-            region = "Angola (Luanda, Bengo, Cuanza Norte, Malanje)",
-            sampleGreeting = "Wimbu kiambote / Ngana ngaxikana"
-        ),
-        LanguageMeta(
             code = "ko",
             namePt = "Coreano",
             nativeName = "한국어",

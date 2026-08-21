@@ -116,7 +116,6 @@ class GeminiSpeechService {
                    - Árabe (العربية - Modern Standard Arabic or regional dialects)
                    - Ucraniano (Українська)
                    - Moldavo (Moldovenească) / Romeno (Română)
-                   - Kimbundu (Quimbundo - Angola) / Kikongo / Umbundu
                    - Coreano (한국어)
                    - Japonês (日本語)
                    - Tailandês (ภาษาไทย)
@@ -124,16 +123,16 @@ class GeminiSpeechService {
                    - Chinês (Mandarim, Cantonês, etc.)
                    - Russo (Русский) e qualquer outro idioma do mundo.
                    If multiple languages or code-switching is present, identify the dominant one and note it.
-                2. Transcribe verbatim all spoken text in its original native script and orthography (e.g. Arabic script for Urdu/Arabic, Devanagari for Hindi, Bengali script for Bengali, Cyrillic for Ukrainian, Hangul for Korean, Kanji/Kana for Japanese, Thai script for Thai, Chinese characters for Chinese, Latin for Portuguese/Kimbundu/Romanian/Moldavian/etc.).
+                2. Transcribe verbatim all spoken text in its original native script and orthography (e.g. Arabic script for Urdu/Arabic, Devanagari for Hindi, Bengali script for Bengali, Cyrillic for Ukrainian, Hangul for Korean, Kanji/Kana for Japanese, Thai script for Thai, Chinese characters for Chinese, Latin for Portuguese/Romanian/Moldavian/etc.).
                 3. Provide an accurate and natural translation into Portuguese (Português).
                 4. Provide an English translation.
                 5. Provide a 1-2 sentence summary of what was spoken (in Portuguese).
                 6. Output strictly valid JSON matching this schema:
                 {
-                  "detectedLanguage": "Name of language in Portuguese (e.g. 'Português', 'Urdu (Paquistão)', 'Hindi (Índia)', 'Bengali (Bangladesh)', 'Árabe', 'Ucraniano', 'Moldavo', 'Romeno', 'Kimbundu (Angola)', 'Coreano', 'Japonês', 'Tailandês', 'Vietnamita', 'Mandarim (Chinês)', etc.)",
-                  "languageCode": "ISO code (e.g. 'pt', 'ur', 'hi', 'bn', 'ar', 'uk', 'mo', 'ro', 'kmb', 'ko', 'ja', 'th', 'vi', 'zh', 'en', 'es', 'fr', 'de', 'it', 'ru')",
+                  "detectedLanguage": "Name of language in Portuguese (e.g. 'Português', 'Urdu (Paquistão)', 'Hindi (Índia)', 'Bengali (Bangladesh)', 'Árabe', 'Ucraniano', 'Moldavo', 'Romeno', 'Coreano', 'Japonês', 'Tailandês', 'Vietnamita', 'Mandarim (Chinês)', etc.)",
+                  "languageCode": "ISO code (e.g. 'pt', 'ur', 'hi', 'bn', 'ar', 'uk', 'mo', 'ro', 'ko', 'ja', 'th', 'vi', 'zh', 'en', 'es', 'fr', 'de', 'it', 'ru')",
                   "languageScript": "Script name (e.g. 'Latino', 'Perso-Árabe', 'Devanagari', 'Bengali', 'Árabe', 'Cirílico', 'Hangul', 'Kanji/Kana', 'Tailandês', 'Hanzi')",
-                  "flagEmoji": "Flag emoji corresponding to the country/culture (e.g. 🇵🇹, 🇵🇰, 🇮🇳, 🇧🇩, 🇸🇦, 🇺🇦, 🇲🇩, 🇷🇴, 🇦🇴, 🇰🇷, 🇯🇵, 🇹🇭, 🇻🇳, 🇨🇳, 🇬🇧, 🇪🇸)",
+                  "flagEmoji": "Flag emoji corresponding to the country/culture (e.g. 🇵🇹, 🇵🇰, 🇮🇳, 🇧🇩, 🇸🇦, 🇺🇦, 🇲🇩, 🇷🇴, 🇰🇷, 🇯🇵, 🇹🇭, 🇻🇳, 🇨🇳, 🇬🇧, 🇪🇸)",
                   "confidence": 0.98,
                   "transcription": "Full verbatim transcription in original language and native script",
                   "translationPt": "Complete translation into Portuguese",

@@ -9,7 +9,6 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -32,31 +31,43 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkAdd
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.Hearing
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -109,6 +120,7 @@ fun LiveScreen(
     val status by liveManager.status.collectAsState()
     val partialText by liveManager.partialText.collectAsState()
     val fullTranscript by liveManager.fullTranscript.collectAsState()
+    val fullSessionTranslationPt by liveManager.fullSessionTranslationPt.collectAsState()
     val segments by liveManager.segments.collectAsState()
     val rmsLevel by liveManager.rmsLevel.collectAsState()
     val activeLangCode by liveManager.activeLanguage.collectAsState()
@@ -117,6 +129,8 @@ fun LiveScreen(
     val detectionConfidence by liveManager.detectionConfidence.collectAsState()
     val ptTranslation by viewModel.livePortugueseTranslation.collectAsState()
     val isTranslating by viewModel.isLiveTranslating.collectAsState()
+
+    var viewModeTab by remember { mutableIntStateOf(0) } // 0 = Fluxo Único Contínuo, 1 = Duas Colunas (Topo)
 
     var hasAudioPermission by remember {
         mutableStateOf(
@@ -134,13 +148,11 @@ fun LiveScreen(
         if (granted) {
             liveManager.startLiveListening()
         } else {
-            Toast.makeText(context, "Permissão de microfone necessária para escuta em direto.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Permissão de microfone necessária para o modo Escuta.", Toast.LENGTH_LONG).show()
         }
     }
 
     val isListening = status is LiveStatus.Listening
-
-    // Sorted in reverse chronological order so newest translations appear at the TOP
     val reversedSegments = remember(segments) { segments.reversed() }
 
     Column(
@@ -156,17 +168,47 @@ fun LiveScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "MODO ESCUTA",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            letterSpacing = 2.sp,
+                            fontSize = 9.5.sp
+                        ),
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    // Silent spy mode badge
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = SophisticatedSurfaceVariant,
+                        border = BorderStroke(0.8.dp, SophisticatedOutline)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.VolumeOff,
+                                contentDescription = null,
+                                tint = EmeraldSuccess,
+                                modifier = Modifier.size(11.dp)
+                            )
+                            Text(
+                                text = "SILENCIOSO / ESPIÃO",
+                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                                color = EmeraldSuccess,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
                 Text(
-                    text = "TRANSCRIÇÃO EM DIRETO",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        letterSpacing = 2.5.sp,
-                        fontSize = 10.sp
-                    ),
-                    color = TextSecondary,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    text = "Live Speech & Tradução",
+                    text = "Escuta & Tradução Contínua",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     color = TextPrimary
@@ -191,7 +233,7 @@ fun LiveScreen(
                             .background(if (isListening) ListeningCoral else TextSecondary)
                     )
                     Text(
-                        text = if (isListening) "EM DIRETO" else "PAUSA",
+                        text = if (isListening) "À ESCUTA" else "PAUSA",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                         color = if (isListening) ListeningCoral else TextSecondary,
                         fontWeight = FontWeight.Bold
@@ -243,7 +285,7 @@ fun LiveScreen(
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "LÍNGUA DETETADA",
+                                text = "LÍNGUA DETETADA NO MODO ESCUTA",
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontSize = 8.5.sp,
                                     letterSpacing = 1.2.sp
@@ -305,76 +347,56 @@ fun LiveScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Two-Column Table Header Labels
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            color = SophisticatedSurfaceVariant.copy(alpha = 0.75f),
-            border = BorderStroke(1.dp, SophisticatedOutline.copy(alpha = 0.6f))
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Column 1 Title (Left)
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = "🌐",
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = "O QUE É DETETADO",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp,
-                            fontSize = 9.5.sp
-                        ),
-                        color = GlowLavender
-                    )
-                }
-
-                // Vertical Divider Indicator
-                Box(
-                    modifier = Modifier
-                        .width(1.dp)
-                        .height(14.dp)
-                        .background(SophisticatedOutline)
+        // View Mode Selector Tabs (Tratar como uma só vs Duas Colunas)
+        TabRow(
+            selectedTabIndex = viewModeTab,
+            containerColor = SophisticatedSurfaceVariant.copy(alpha = 0.8f),
+            contentColor = LavenderPrimary,
+            divider = {},
+            indicator = { tabPositions ->
+                TabRowDefaults.SecondaryIndicator(
+                    modifier = Modifier.tabIndicatorOffset(tabPositions[viewModeTab]),
+                    height = 2.5.dp,
+                    color = LavenderPrimary
                 )
-
-                Spacer(modifier = Modifier.width(10.dp))
-
-                // Column 2 Title (Right)
-                Row(
-                    modifier = Modifier.weight(1f),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+        ) {
+            Tab(
+                selected = viewModeTab == 0,
+                onClick = { viewModeTab = 0 },
+                text = {
                     Text(
-                        text = "🇵🇹",
-                        fontSize = 12.sp
-                    )
-                    Text(
-                        text = "TRADUZIDO P/ PORTUGUÊS",
-                        style = MaterialTheme.typography.labelSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            letterSpacing = 1.sp,
-                            fontSize = 9.5.sp
+                        text = "Fluxo Único Contínuo",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontSize = 12.sp,
+                            fontWeight = if (viewModeTab == 0) FontWeight.Bold else FontWeight.Normal
                         ),
-                        color = AmberGold
+                        color = if (viewModeTab == 0) TextPrimary else TextSecondary
                     )
                 }
-            }
+            )
+            Tab(
+                selected = viewModeTab == 1,
+                onClick = { viewModeTab = 1 },
+                text = {
+                    Text(
+                        text = "Duas Colunas (Topo Recente)",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontSize = 12.sp,
+                            fontWeight = if (viewModeTab == 1) FontWeight.Bold else FontWeight.Normal
+                        ),
+                        color = if (viewModeTab == 1) TextPrimary else TextSecondary
+                    )
+                }
+            )
         }
 
         Spacer(modifier = Modifier.height(6.dp))
 
-        // Main Live Two-Column Dialogue View (Newest on TOP)
+        // Main Escuta Surface Card
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -389,20 +411,20 @@ fun LiveScreen(
                     .fillMaxSize()
                     .padding(10.dp)
             ) {
-                // Waveform Level Bar when microphone is active
+                // Waveform Level Bar when listening
                 if (isListening) {
                     LiveAudioLevelBar(rmsLevel = rmsLevel)
                     Spacer(modifier = Modifier.height(6.dp))
                 }
 
-                // Top Actions inside Card (Clean / Copy All)
+                // Top Toolbar inside Card
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Mais recentes no topo ⬆️",
+                        text = if (viewModeTab == 0) "Sessão de Escuta contínua e unificada" else "Mais recentes no topo ⬆️",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                         color = TextTertiary
                     )
@@ -410,7 +432,7 @@ fun LiveScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (isTranslating) {
                             Text(
-                                text = "A traduzir...",
+                                text = "A traduzir em direto...",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
                                 color = GlowLavender,
                                 modifier = Modifier.align(Alignment.CenterVertically)
@@ -420,17 +442,19 @@ fun LiveScreen(
                         // Copy all
                         IconButton(
                             onClick = {
-                                val fullText = buildString {
-                                    reversedSegments.forEach { seg ->
-                                        appendLine("🌐 [${seg.detectedLang.uppercase()}]: ${seg.text}")
-                                        appendLine("🇵🇹 [PT]: ${seg.translationPt.ifBlank { seg.text }}")
-                                        appendLine()
-                                    }
+                                val fullOriginal = if (fullTranscript.isNotBlank() && partialText.isNotBlank()) "$fullTranscript $partialText" else fullTranscript.ifBlank { partialText }
+                                val fullPt = if (fullSessionTranslationPt.isNotBlank()) fullSessionTranslationPt else ptTranslation
+                                val copyText = buildString {
+                                    appendLine("=== ESCUTA SILENCIOSA (${detectedLanguageMeta.namePt.uppercase()}) ===")
+                                    appendLine(fullOriginal)
+                                    appendLine()
+                                    appendLine("=== TRADUÇÃO EM PORTUGUÊS ===")
+                                    appendLine(fullPt.ifBlank { fullOriginal })
                                 }
-                                if (fullText.isNotBlank()) {
+                                if (copyText.isNotBlank()) {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("Olho do Dumbo Live", fullText))
-                                    Toast.makeText(context, "Conversa completa copiada!", Toast.LENGTH_SHORT).show()
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Escuta Dumbo", copyText))
+                                    Toast.makeText(context, "Escuta e tradução copiadas!", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             modifier = Modifier.size(28.dp)
@@ -463,7 +487,7 @@ fun LiveScreen(
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                val hasContent = reversedSegments.isNotEmpty() || partialText.isNotBlank()
+                val hasContent = fullTranscript.isNotBlank() || partialText.isNotBlank() || reversedSegments.isNotEmpty()
 
                 if (!hasContent) {
                     Column(
@@ -481,7 +505,7 @@ fun LiveScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
-                                imageVector = Icons.Default.Mic,
+                                imageVector = Icons.Default.Hearing,
                                 contentDescription = null,
                                 tint = TextTertiary,
                                 modifier = Modifier.size(28.dp)
@@ -489,53 +513,182 @@ fun LiveScreen(
                         }
                         Spacer(modifier = Modifier.height(10.dp))
                         Text(
-                            text = if (isListening) "A escutar em direto... Fale agora." else "Toque em 'Iniciar Escuta' para transcrever e traduzir em direto.",
+                            text = if (isListening) "À escuta silenciosa contínua... Fale agora." else "Toque em 'Iniciar Escuta' para começar a ouvir e traduzir em direto.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondary,
                             textAlign = TextAlign.Center
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "As novas frases faladas aparecerão instantaneamente no topo!",
+                            text = "Sem avisos sonoros (Modo Espião 100% Silencioso). As falas são unificadas sem perdas.",
                             style = MaterialTheme.typography.labelSmall,
                             color = GlowLavender,
                             textAlign = TextAlign.Center
                         )
                     }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // 1. ACTIVE LIVE UTTERANCE ROW (Currently being spoken right now)
-                        if (partialText.isNotBlank()) {
-                            item(key = "active_speaking_row") {
-                                ActiveSpeakingLiveRow(
-                                    partialText = partialText,
-                                    ptTranslation = ptTranslation,
-                                    isTranslating = isTranslating,
-                                    detectedLang = activeLangCode,
-                                    flag = detectedLanguageMeta.flag
-                                )
+                    if (viewModeTab == 0) {
+                        // UNIFIED CONTINUOUS FLOW (Tratar como uma só tradução contínua)
+                        val combinedOriginal = if (fullTranscript.isNotBlank() && partialText.isNotBlank()) {
+                            "$fullTranscript $partialText"
+                        } else {
+                            fullTranscript.ifBlank { partialText }
+                        }
+                        val combinedPt = fullSessionTranslationPt.ifBlank { ptTranslation }.ifBlank { combinedOriginal }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // Column 1: Detected original continuous stream
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = SophisticatedSurfaceVariant,
+                                border = BorderStroke(1.dp, SophisticatedOutline),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(text = detectedLanguageMeta.flag, fontSize = 16.sp)
+                                            Text(
+                                                text = "TEXTO ORIGINAL DETETADO (${detectedLanguageMeta.namePt.uppercase()})",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 9.5.sp,
+                                                    letterSpacing = 1.sp
+                                                ),
+                                                color = GlowLavender
+                                            )
+                                        }
+                                        if (isListening) {
+                                            Text(
+                                                text = "A captar...",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                color = ListeningCoral
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text(
+                                        text = combinedOriginal,
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontFamily = FontFamily.Serif,
+                                            fontSize = 15.sp,
+                                            lineHeight = 22.sp
+                                        ),
+                                        color = TextPrimary
+                                    )
+                                }
+                            }
+
+                            // Column 2: Portuguese full continuous translation
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = LavenderContainer.copy(alpha = 0.45f),
+                                border = BorderStroke(1.dp, LavenderPrimary.copy(alpha = 0.5f)),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(text = "🇵🇹", fontSize = 16.sp)
+                                            Text(
+                                                text = "TRADUÇÃO INTEGRAL EM PORTUGUÊS (PT)",
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontWeight = FontWeight.Bold,
+                                                    fontSize = 9.5.sp,
+                                                    letterSpacing = 1.sp
+                                                ),
+                                                color = AmberGold
+                                            )
+                                        }
+
+                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            IconButton(
+                                                onClick = {
+                                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                    clipboard.setPrimaryClip(ClipData.newPlainText("Tradução PT", combinedPt))
+                                                    Toast.makeText(context, "Tradução copiada!", Toast.LENGTH_SHORT).show()
+                                                },
+                                                modifier = Modifier.size(24.dp)
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.ContentCopy,
+                                                    contentDescription = "Copiar PT",
+                                                    tint = LavenderPrimary,
+                                                    modifier = Modifier.size(15.dp)
+                                                )
+                                            }
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Text(
+                                        text = combinedPt,
+                                        style = MaterialTheme.typography.bodyLarge.copy(
+                                            fontWeight = FontWeight.Medium,
+                                            fontSize = 15.sp,
+                                            lineHeight = 22.sp
+                                        ),
+                                        color = TextPrimary
+                                    )
+                                }
                             }
                         }
-
-                        // 2. COMPLETED DIALOGUE SEGMENTS (Reverse Order - Newest First!)
-                        items(
-                            items = reversedSegments,
-                            key = { it.id }
-                        ) { segment ->
-                            TwoColumnDialogueItem(
-                                segment = segment,
-                                onSpeak = { textToSpeak ->
-                                    ttsManager.speak(textToSpeak, "pt-PT")
-                                },
-                                onCopy = { textToCopy ->
-                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                    clipboard.setPrimaryClip(ClipData.newPlainText("Live Segment", textToCopy))
-                                    Toast.makeText(context, "Texto copiado!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        // TWO-COLUMN REVERSE CHRONOLOGICAL LIST (Newest at TOP)
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            if (partialText.isNotBlank()) {
+                                item(key = "active_speaking_row") {
+                                    ActiveSpeakingLiveRow(
+                                        partialText = partialText,
+                                        ptTranslation = ptTranslation,
+                                        isTranslating = isTranslating,
+                                        detectedLang = activeLangCode,
+                                        flag = detectedLanguageMeta.flag
+                                    )
                                 }
-                            )
+                            }
+
+                            items(
+                                items = reversedSegments,
+                                key = { it.id }
+                            ) { segment ->
+                                TwoColumnDialogueItem(
+                                    segment = segment,
+                                    onSpeak = { textToSpeak ->
+                                        ttsManager.speak(textToSpeak, "pt-PT")
+                                    },
+                                    onCopy = { textToCopy ->
+                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                        clipboard.setPrimaryClip(ClipData.newPlainText("Live Segment", textToCopy))
+                                        Toast.makeText(context, "Texto copiado!", Toast.LENGTH_SHORT).show()
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -574,7 +727,7 @@ fun LiveScreen(
                     .testTag("live_toggle_button")
             ) {
                 Icon(
-                    imageVector = if (isListening) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    imageVector = if (isListening) Icons.Default.Pause else Icons.Default.Hearing,
                     contentDescription = null,
                     tint = DeepPurpleOnPrimary,
                     modifier = Modifier.size(22.dp)
@@ -591,22 +744,32 @@ fun LiveScreen(
             // Save to History Button
             Button(
                 onClick = {
-                    val content = if (reversedSegments.isNotEmpty()) {
-                        reversedSegments.joinToString("\n") {
-                            "[${it.detectedLang.uppercase()}]: ${it.text} -> [PT]: ${it.translationPt.ifBlank { it.text }}"
-                        }
+                    val fullCombined = if (fullTranscript.isNotBlank() && partialText.isNotBlank()) {
+                        "$fullTranscript $partialText"
                     } else {
                         fullTranscript.ifBlank { partialText }
                     }
+                    val ptCombined = fullSessionTranslationPt.ifBlank { ptTranslation }
+
+                    val content = if (fullCombined.isNotBlank()) {
+                        buildString {
+                            appendLine("[ESCUTA ${detectedLanguageMeta.namePt.uppercase()}]: $fullCombined")
+                            appendLine("[TRADUÇÃO PT]: ${ptCombined.ifBlank { fullCombined }}")
+                        }
+                    } else if (reversedSegments.isNotEmpty()) {
+                        reversedSegments.joinToString("\n") {
+                            "[${it.detectedLang.uppercase()}]: ${it.text} -> [PT]: ${it.translationPt.ifBlank { it.text }}"
+                        }
+                    } else ""
 
                     if (content.isNotBlank()) {
                         viewModel.saveLiveSession(content, activeLangCode)
-                        Toast.makeText(context, "Sessão guardada no Histórico!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Sessão de Escuta guardada no Histórico!", Toast.LENGTH_SHORT).show()
                     } else {
-                        Toast.makeText(context, "Nenhum diálogo para guardar.", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Nenhum conteúdo para guardar.", Toast.LENGTH_SHORT).show()
                     }
                 },
-                enabled = reversedSegments.isNotEmpty() || fullTranscript.isNotBlank(),
+                enabled = reversedSegments.isNotEmpty() || fullTranscript.isNotBlank() || partialText.isNotBlank(),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = SophisticatedSurfaceVariant,
@@ -663,7 +826,7 @@ private fun ActiveSpeakingLiveRow(
                             .background(ListeningCoral)
                     )
                     Text(
-                        text = "EM TEMPO REAL (A FALAR...)",
+                        text = "EM TEMPO REAL (À ESCUTA...)",
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontSize = 8.5.sp,
                             fontWeight = FontWeight.Bold,
@@ -728,7 +891,7 @@ private fun ActiveSpeakingLiveRow(
                         )
                     } else {
                         Text(
-                            text = if (isTranslating) "A traduzir..." else "A aguardar tradução...",
+                            text = if (isTranslating) "A traduzir..." else "A aguardar fala...",
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                             color = TextTertiary
                         )
@@ -750,20 +913,14 @@ private fun TwoColumnDialogueItem(
         sdf.format(Date(segment.timestampMs))
     }
 
-    val meta = remember(segment.detectedLang) {
-        SupportedLanguages.findByCode(segment.detectedLang) ?: SupportedLanguages.ALL.first()
-    }
-
-    val portugueseText = segment.translationPt.ifBlank { segment.text }
-
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = SophisticatedSurfaceVariant.copy(alpha = 0.55f),
-        border = BorderStroke(0.8.dp, SophisticatedOutline.copy(alpha = 0.7f)),
+        color = SophisticatedSurfaceVariant,
+        border = BorderStroke(1.dp, SophisticatedOutline),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(10.dp)) {
-            // Timestamp and Lang meta header
+            // Header for this segment
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -771,124 +928,85 @@ private fun TwoColumnDialogueItem(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(text = meta.flag, fontSize = 12.sp)
                     Text(
-                        text = "${meta.namePt} (${meta.code.uppercase()})",
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
-                        color = TextSecondary,
+                        text = if (segment.flagEmoji.isNotBlank()) segment.flagEmoji else "🌐",
+                        fontSize = 12.sp
+                    )
+                    Text(
+                        text = segment.detectedLangName.ifBlank { segment.detectedLang.uppercase() },
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                        color = GlowLavender,
                         fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        text = "• $timeFormatted",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                        color = TextTertiary
                     )
                 }
 
-                Text(
-                    text = timeFormatted,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                    color = TextTertiary
-                )
+                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    IconButton(
+                        onClick = { onCopy("${segment.text}\nTradução: ${segment.translationPt.ifBlank { segment.text }}") },
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = "Copiar segmento",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(13.dp)
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(6.dp))
 
-            // Two Columns Side by Side
+            // Two-Column Layout
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(IntrinsicSize.Min),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                // Column 1 (Left): Detected Original Text
+                // Column 1: Detected Text
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .background(SophisticatedSurface, RoundedCornerShape(10.dp))
-                        .border(0.5.dp, SophisticatedOutline, RoundedCornerShape(10.dp))
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
+                        .padding(8.dp)
                 ) {
                     Text(
                         text = segment.text,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontSize = 13.5.sp,
-                            lineHeight = 19.sp
+                            fontFamily = FontFamily.Serif,
+                            fontSize = 13.5.sp
                         ),
-                        color = TextSecondary
+                        color = TextPrimary
                     )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        IconButton(
-                            onClick = { onCopy(segment.text) },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copiar Original",
-                                tint = TextTertiary,
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
-                    }
                 }
 
-                // Column 2 (Right): Translated to Portuguese
+                // Column 2: Portuguese Translation
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
                         .background(LavenderContainer.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
-                        .border(1.dp, LavenderPrimary.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
-                        .padding(8.dp),
-                    verticalArrangement = Arrangement.SpaceBetween
+                        .border(0.8.dp, LavenderPrimary.copy(alpha = 0.35f), RoundedCornerShape(10.dp))
+                        .padding(8.dp)
                 ) {
+                    val translation = segment.translationPt.ifBlank { segment.text }
                     Text(
-                        text = portugueseText,
+                        text = translation,
                         style = MaterialTheme.typography.bodyMedium.copy(
-                            fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.5.sp,
-                            lineHeight = 19.sp
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 13.5.sp
                         ),
                         color = TextPrimary
                     )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        // Play TTS in Portuguese
-                        IconButton(
-                            onClick = { onSpeak(portugueseText) },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.VolumeUp,
-                                contentDescription = "Ouvir em Português",
-                                tint = LavenderPrimary,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-
-                        IconButton(
-                            onClick = { onCopy(portugueseText) },
-                            modifier = Modifier.size(24.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = "Copiar Tradução",
-                                tint = LavenderPrimary.copy(alpha = 0.8f),
-                                modifier = Modifier.size(13.dp)
-                            )
-                        }
-                    }
                 }
             }
         }
@@ -897,34 +1015,29 @@ private fun TwoColumnDialogueItem(
 
 @Composable
 private fun LiveAudioLevelBar(rmsLevel: Float) {
-    val barColor by animateColorAsState(
-        targetValue = if (rmsLevel > 0.6f) ListeningCoral else GlowLavender,
-        label = "level_color"
-    )
-
     Canvas(
         modifier = Modifier
             .fillMaxWidth()
-            .height(10.dp)
+            .height(6.dp)
+            .clip(RoundedCornerShape(3.dp))
     ) {
-        val totalBars = 28
-        val spacing = 3.dp.toPx()
-        val totalSpacing = spacing * (totalBars - 1)
-        val barWidth = (size.width - totalSpacing) / totalBars
+        val barCount = 30
+        val barWidth = size.width / barCount
+        val activeBars = (rmsLevel * barCount).toInt().coerceIn(1, barCount)
 
-        for (i in 0 until totalBars) {
-            val centerDist = kotlin.math.abs(i - totalBars / 2f) / (totalBars / 2f)
-            val normalizedFactor = (1f - centerDist * 0.7f).coerceIn(0.2f, 1f)
-            val barHeight = ((rmsLevel * normalizedFactor * size.height).coerceAtLeast(2.dp.toPx()))
-
-            val x = i * (barWidth + spacing)
-            val y = (size.height - barHeight) / 2
+        for (i in 0 until barCount) {
+            val isActive = i < activeBars
+            val color = if (isActive) {
+                if (i > barCount * 0.75f) ListeningCoral else LavenderPrimary
+            } else {
+                Color.White.copy(alpha = 0.08f)
+            }
 
             drawRoundRect(
-                color = barColor.copy(alpha = (0.35f + rmsLevel * 0.65f).coerceIn(0.3f, 1f)),
-                topLeft = Offset(x, y),
-                size = Size(barWidth, barHeight),
-                cornerRadius = CornerRadius(3f, 3f)
+                color = color,
+                topLeft = Offset(i * barWidth + 1f, 0f),
+                size = Size(barWidth - 2f, size.height),
+                cornerRadius = CornerRadius(2f, 2f)
             )
         }
     }

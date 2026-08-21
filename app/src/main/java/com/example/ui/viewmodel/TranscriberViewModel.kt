@@ -39,6 +39,7 @@ import java.util.Locale
 private const val TAG = "TranscriberViewModel"
 private const val PREFS_NAME = "vozlingua_prefs"
 private const val KEY_CUSTOM_API_KEY = "custom_gemini_api_key"
+private const val KEY_ENABLED_DUMBO_LANGS = "enabled_dumbo_languages"
 
 sealed interface RecordingUiState {
     object Idle : RecordingUiState
@@ -88,6 +89,13 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
     private val _customApiKey = MutableStateFlow(sharedPrefs.getString(KEY_CUSTOM_API_KEY, "") ?: "")
     val customApiKey: StateFlow<String> = _customApiKey.asStateFlow()
 
+    // Enabled languages in Dumbo (Gravar, Escuta, Diálogo)
+    private val _enabledDumboLanguages = MutableStateFlow<Set<String>>(
+        sharedPrefs.getStringSet(KEY_ENABLED_DUMBO_LANGS, null)
+            ?: SupportedLanguages.ALL.map { it.code }.toSet()
+    )
+    val enabledDumboLanguages: StateFlow<Set<String>> = _enabledDumboLanguages.asStateFlow()
+
     // SMTP Config State
     private val _smtpConfig = MutableStateFlow(smtpPrefsManager.getSmtpConfig())
     val smtpConfig: StateFlow<SmtpConfig> = _smtpConfig.asStateFlow()
@@ -105,6 +113,11 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
     private var liveTranslationJob: kotlinx.coroutines.Job? = null
 
     init {
+        // Sync initial enabled languages with speech engines
+        liveSpeechManager.setAllowedLanguages(_enabledDumboLanguages.value)
+        dialogueManager.setAllowedLanguages(_enabledDumboLanguages.value)
+        dialogueManager.setApiKeyOverride(_customApiKey.value.ifBlank { null })
+
         // Automatically translate live transcription to Portuguese continuously as speech flows
         viewModelScope.launch {
             combine(
@@ -123,6 +136,7 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
                 if (combinedText.isBlank()) {
                     liveTranslationJob?.cancel()
                     _livePortugueseTranslation.value = ""
+                    liveSpeechManager.updateFullSessionTranslation("")
                     _isLiveTranslating.value = false
                     return@collect
                 }
@@ -130,13 +144,14 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
                 if (lang.startsWith("pt", ignoreCase = true)) {
                     liveTranslationJob?.cancel()
                     _livePortugueseTranslation.value = combinedText
+                    liveSpeechManager.updateFullSessionTranslation(combinedText)
                     _isLiveTranslating.value = false
                 } else {
-                    // Debounce translation slightly so we don't bombard API on every single syllable
+                    // Debounce translation slightly for natural speech flow
                     liveTranslationJob?.cancel()
                     liveTranslationJob = viewModelScope.launch {
                         _isLiveTranslating.value = true
-                        kotlinx.coroutines.delay(280) // 280ms debounce for natural speech flow
+                        kotlinx.coroutines.delay(200)
                         val res = speechService.translateTextToPortuguese(
                             text = combinedText,
                             sourceLang = lang,
@@ -146,6 +161,7 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
                             onSuccess = { translated ->
                                 if (translated.isNotBlank()) {
                                     _livePortugueseTranslation.value = translated
+                                    liveSpeechManager.updateFullSessionTranslation(translated)
                                 }
                             },
                             onFailure = {
@@ -213,6 +229,7 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
                 onSuccess = { translated ->
                     if (translated.isNotBlank()) {
                         _livePortugueseTranslation.value = translated
+                        liveSpeechManager.updateFullSessionTranslation(translated)
                     }
                 },
                 onFailure = {
@@ -221,6 +238,46 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
             )
             _isLiveTranslating.value = false
         }
+    }
+
+    // Dumbo Language Selection Management (Gravar, Escuta, Diálogo)
+    fun toggleDumboLanguage(code: String, enabled: Boolean) {
+        val current = _enabledDumboLanguages.value.toMutableSet()
+        if (enabled) {
+            current.add(code)
+        } else {
+            if (current.size > 1) {
+                current.remove(code)
+            }
+        }
+        _enabledDumboLanguages.value = current
+        sharedPrefs.edit().putStringSet(KEY_ENABLED_DUMBO_LANGS, current).apply()
+        liveSpeechManager.setAllowedLanguages(current)
+        dialogueManager.setAllowedLanguages(current)
+    }
+
+    fun setAllDumboLanguages(enableAll: Boolean) {
+        val updated = if (enableAll) {
+            SupportedLanguages.ALL.map { it.code }.toSet()
+        } else {
+            setOf("pt-PT", "pt")
+        }
+        _enabledDumboLanguages.value = updated
+        sharedPrefs.edit().putStringSet(KEY_ENABLED_DUMBO_LANGS, updated).apply()
+        liveSpeechManager.setAllowedLanguages(updated)
+        dialogueManager.setAllowedLanguages(updated)
+    }
+
+    fun setMainDumboLanguagesOnly() {
+        val mainCodes = setOf("pt-PT", "pt", "es-ES", "es", "en-US", "en-GB", "en", "fr-FR", "fr", "de-DE", "de", "it-IT", "it")
+        _enabledDumboLanguages.value = mainCodes
+        sharedPrefs.edit().putStringSet(KEY_ENABLED_DUMBO_LANGS, mainCodes).apply()
+        liveSpeechManager.setAllowedLanguages(mainCodes)
+        dialogueManager.setAllowedLanguages(mainCodes)
+    }
+
+    fun isDumboLanguageEnabled(code: String): Boolean {
+        return _enabledDumboLanguages.value.contains(code)
     }
 
     // Combined Flow for Recordings History

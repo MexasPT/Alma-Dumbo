@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.CorporateFare
@@ -47,6 +48,9 @@ import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -96,6 +100,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.BuildConfig
+import com.example.audio.SupportedLanguages
 import com.example.smtp.SmtpConfig
 import com.example.smtp.SmtpResult
 import com.example.smtp.SmtpSecurityType
@@ -458,6 +463,9 @@ private fun GeneralSettingsTab(viewModel: TranscriberViewModel) {
                 }
             }
         }
+
+        // Active Dumbo Languages Card (Gravar, Escutar, Diálogo)
+        DumboLanguagesSettingsCard(viewModel = viewModel)
 
         // Gemini API Card
         Card(
@@ -1512,6 +1520,266 @@ private fun TechItemBullet(
                 style = MaterialTheme.typography.bodySmall,
                 color = TextSecondary
             )
+        }
+    }
+}
+
+@Composable
+private fun DumboLanguagesSettingsCard(viewModel: TranscriberViewModel) {
+    val enabledLangs by viewModel.enabledDumboLanguages.collectAsState()
+    var searchQuery by remember { mutableStateOf("") }
+    var isExpanded by remember { mutableStateOf(false) }
+
+    val allLanguages = SupportedLanguages.ALL
+    val filteredLanguages = remember(searchQuery) {
+        if (searchQuery.isBlank()) {
+            allLanguages
+        } else {
+            val q = searchQuery.lowercase().trim()
+            allLanguages.filter {
+                it.namePt.lowercase().contains(q) ||
+                it.nativeName.lowercase().contains(q) ||
+                it.code.lowercase().contains(q) ||
+                it.region.lowercase().contains(q)
+            }
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .testTag("dumbo_languages_settings_card"),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(containerColor = SophisticatedSurface),
+        border = BorderStroke(1.dp, GlowLavender.copy(alpha = 0.5f))
+    ) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            // Header
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(LavenderContainer, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Public,
+                            contentDescription = null,
+                            tint = LavenderOnContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "Línguas Ativas no Dumbo",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Deteção e tradução em Gravar, Escutar e Diálogo",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                }
+
+                // Active counter badge
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = LavenderContainer,
+                    border = BorderStroke(1.dp, LavenderPrimary.copy(alpha = 0.5f))
+                ) {
+                    Text(
+                        text = "${enabledLangs.size}/${allLanguages.size}",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = LavenderOnContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Explanation
+            Text(
+                text = "O Dumbo apenas irá detetar e traduzir entre as línguas ativadas. Se desativar uma língua, ela não será captada.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Quick Preset Buttons
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { viewModel.setAllDumboLanguages(true) },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f),
+                    border = BorderStroke(1.dp, LavenderPrimary.copy(alpha = 0.6f))
+                ) {
+                    Text(
+                        text = "Ativar Todas",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = LavenderPrimary
+                    )
+                }
+
+                OutlinedButton(
+                    onClick = { viewModel.setMainDumboLanguagesOnly() },
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.weight(1f),
+                    border = BorderStroke(1.dp, AmberGold.copy(alpha = 0.6f))
+                ) {
+                    Text(
+                        text = "Principais (6)",
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = AmberGold
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Search input
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                placeholder = { Text("Filtrar línguas...", color = TextSecondary, fontSize = 12.5.sp) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        tint = LavenderPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }, modifier = Modifier.size(24.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = "Limpar",
+                                tint = TextSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = LavenderPrimary,
+                    unfocusedBorderColor = SophisticatedOutline,
+                    focusedContainerColor = SophisticatedSurfaceVariant,
+                    unfocusedContainerColor = SophisticatedSurfaceVariant,
+                    focusedTextColor = TextPrimary,
+                    unfocusedTextColor = TextPrimary
+                ),
+                singleLine = true
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Languages toggle list
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                val displayList = if (isExpanded || searchQuery.isNotBlank()) filteredLanguages else filteredLanguages.take(5)
+
+                displayList.forEach { lang ->
+                    val isChecked = enabledLangs.contains(lang.code)
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { viewModel.toggleDumboLanguage(lang.code, !isChecked) },
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isChecked) SophisticatedSurfaceVariant else SophisticatedSurfaceVariant.copy(alpha = 0.4f),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isChecked) LavenderPrimary.copy(alpha = 0.4f) else SophisticatedOutline.copy(alpha = 0.4f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(text = lang.flag, fontSize = 20.sp)
+                                Column {
+                                    Text(
+                                        text = lang.namePt,
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
+                                        fontWeight = if (isChecked) FontWeight.Bold else FontWeight.Normal,
+                                        color = if (isChecked) TextPrimary else TextSecondary
+                                    )
+                                    Text(
+                                        text = "${lang.nativeName} (${lang.code})",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.5.sp),
+                                        color = if (isChecked) LavenderPrimary else TextTertiary
+                                    )
+                                }
+                            }
+
+                            Switch(
+                                checked = isChecked,
+                                onCheckedChange = { viewModel.toggleDumboLanguage(lang.code, it) },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = LavenderPrimary,
+                                    checkedTrackColor = LavenderContainer,
+                                    uncheckedThumbColor = TextSecondary,
+                                    uncheckedTrackColor = SophisticatedSurface
+                                )
+                            )
+                        }
+                    }
+                }
+
+                if (filteredLanguages.size > 5 && searchQuery.isBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Button(
+                        onClick = { isExpanded = !isExpanded },
+                        shape = RoundedCornerShape(10.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SophisticatedSurfaceVariant,
+                            contentColor = LavenderPrimary
+                        ),
+                        border = BorderStroke(1.dp, SophisticatedOutline),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = if (isExpanded) "Mostrar Menos" else "Ver Todas as ${allLanguages.size} Línguas",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = LavenderPrimary
+                        )
+                    }
+                }
+            }
         }
     }
 }
