@@ -59,7 +59,7 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
 
     private val db = AppDatabase.getInstance(application)
     private val dao = db.transcriptionDao()
-    private val speechService = GeminiSpeechService()
+    val speechService = GeminiSpeechService()
     private val smtpClient = SmtpClient()
     private val smtpPrefsManager = SmtpPreferencesManager(application)
     private val locationHelper = LocationHelper(application)
@@ -68,6 +68,7 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
     val playbackManager = AudioPlaybackManager(application)
     val liveSpeechManager = LiveSpeechManager(application, viewModelScope)
     val ttsManager = TtsManager(application)
+    val dialogueManager = com.example.audio.DialogueManager(application, viewModelScope, speechService, ttsManager)
 
     private val sharedPrefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 

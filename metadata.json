@@ -1,6 +1,6 @@
 {
-  "name": "Alma Dumbo",
-  "description": "Detecção de idiomas, transcrição inteligente e tradução com IA multimodal.",
+  "name": "Olho do Dumbo",
+  "description": "O Olho que tudo vê e os Ouvidos que tudo ouvem: Tradução em tempo real de voz, diálogo bidirecional e câmara Sauron.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

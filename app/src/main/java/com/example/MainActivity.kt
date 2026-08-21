@@ -12,16 +12,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.outlined.GraphicEq
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Language
-import androidx.compose.material.icons.outlined.Mic
+import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -40,10 +40,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.ui.screens.DumboContainerScreen
 import com.example.ui.screens.HistoryScreen
 import com.example.ui.screens.LanguagesCatalogScreen
-import com.example.ui.screens.LiveScreen
-import com.example.ui.screens.RecordScreen
+import com.example.ui.screens.SauronCameraScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.LavenderContainer
 import com.example.ui.theme.LavenderPrimary
@@ -61,20 +61,20 @@ sealed class Screen(
     val unselectedIcon: ImageVector,
     val testTag: String
 ) {
-    object Record : Screen(
-        route = "record",
-        title = "Gravar",
-        selectedIcon = Icons.Filled.Mic,
-        unselectedIcon = Icons.Outlined.Mic,
-        testTag = "nav_record"
+    object Dumbo : Screen(
+        route = "dumbo",
+        title = "Dumbo",
+        selectedIcon = Icons.Filled.RecordVoiceOver,
+        unselectedIcon = Icons.Outlined.RecordVoiceOver,
+        testTag = "nav_dumbo"
     )
 
-    object Live : Screen(
-        route = "live",
-        title = "Live",
-        selectedIcon = Icons.Filled.GraphicEq,
-        unselectedIcon = Icons.Outlined.GraphicEq,
-        testTag = "nav_live"
+    object Sauron : Screen(
+        route = "sauron",
+        title = "Sauron",
+        selectedIcon = Icons.Filled.Visibility,
+        unselectedIcon = Icons.Outlined.Visibility,
+        testTag = "nav_sauron"
     )
 
     object History : Screen(
@@ -119,8 +119,8 @@ fun MainApp(
     viewModel: TranscriberViewModel = viewModel()
 ) {
     val navItems = listOf(
-        Screen.Record,
-        Screen.Live,
+        Screen.Dumbo,
+        Screen.Sauron,
         Screen.History,
         Screen.Languages,
         Screen.Settings
@@ -180,8 +180,8 @@ fun MainApp(
             modifier = Modifier.padding(innerPadding)
         ) { tabIndex ->
             when (tabIndex) {
-                0 -> RecordScreen(viewModel = viewModel)
-                1 -> LiveScreen(viewModel = viewModel)
+                0 -> DumboContainerScreen(viewModel = viewModel)
+                1 -> SauronCameraScreen(viewModel = viewModel)
                 2 -> HistoryScreen(viewModel = viewModel)
                 3 -> LanguagesCatalogScreen(viewModel = viewModel)
                 4 -> SettingsScreen(viewModel = viewModel)

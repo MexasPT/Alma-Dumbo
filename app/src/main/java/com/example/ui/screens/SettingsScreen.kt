@@ -42,12 +42,14 @@ import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MarkEmailRead
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -229,6 +231,212 @@ private fun GeneralSettingsTab(viewModel: TranscriberViewModel) {
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // Voice Selection (TTS) Card
+        val ttsManager = viewModel.ttsManager
+        val currentProfile by ttsManager.currentProfile.collectAsState()
+        val isTtsSpeaking by ttsManager.isSpeaking.collectAsState()
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(22.dp),
+            colors = CardDefaults.cardColors(containerColor = SophisticatedSurface),
+            border = BorderStroke(1.dp, GlowLavender.copy(alpha = 0.5f))
+        ) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .background(LavenderContainer, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.RecordVoiceOver,
+                            contentDescription = null,
+                            tint = LavenderOnContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Column {
+                        Text(
+                            text = "Voz de Reprodução (TTS)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            text = "Configuração da voz utilizada em Diálogo e Leituras",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                // Voices list with Gender sections
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    // Feminine Section
+                    Text(
+                        text = "VOZES FEMININAS",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp, fontSize = 9.5.sp),
+                        color = GlowLavender,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    listOf(com.example.audio.VoicePresets.FEMININE_1, com.example.audio.VoicePresets.FEMININE_2).forEach { profile ->
+                        val isSelected = currentProfile.id == profile.id
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { ttsManager.setVoiceProfile(profile) },
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isSelected) LavenderContainer.copy(alpha = 0.5f) else SophisticatedSurfaceVariant,
+                            border = BorderStroke(1.dp, if (isSelected) LavenderPrimary else SophisticatedOutline)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isSelected) LavenderPrimary else Color.Transparent)
+                                            .border(1.5.dp, if (isSelected) LavenderPrimary else TextSecondary, CircleShape)
+                                    )
+                                    Column {
+                                        Text(
+                                            text = profile.name,
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = if (isSelected) TextPrimary else TextSecondary
+                                        )
+                                        Text(
+                                            text = profile.subtitle,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextTertiary
+                                        )
+                                    }
+                                }
+
+                                // Demo Button
+                                OutlinedButton(
+                                    onClick = { ttsManager.playDemo(profile) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    border = BorderStroke(1.dp, LavenderPrimary.copy(alpha = 0.7f))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VolumeUp,
+                                        contentDescription = "Ouvir Demo",
+                                        tint = LavenderPrimary,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Demo",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                        color = LavenderPrimary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // Masculine Section
+                    Text(
+                        text = "VOZES MASCULINAS",
+                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp, fontSize = 9.5.sp),
+                        color = AmberGold,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    listOf(com.example.audio.VoicePresets.MASCULINE_1, com.example.audio.VoicePresets.MASCULINE_2).forEach { profile ->
+                        val isSelected = currentProfile.id == profile.id
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { ttsManager.setVoiceProfile(profile) },
+                            shape = RoundedCornerShape(14.dp),
+                            color = if (isSelected) LavenderContainer.copy(alpha = 0.5f) else SophisticatedSurfaceVariant,
+                            border = BorderStroke(1.dp, if (isSelected) LavenderPrimary else SophisticatedOutline)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    modifier = Modifier.weight(1f)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(12.dp)
+                                            .clip(CircleShape)
+                                            .background(if (isSelected) LavenderPrimary else Color.Transparent)
+                                            .border(1.5.dp, if (isSelected) LavenderPrimary else TextSecondary, CircleShape)
+                                    )
+                                    Column {
+                                        Text(
+                                            text = profile.name,
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
+                                            color = if (isSelected) TextPrimary else TextSecondary
+                                        )
+                                        Text(
+                                            text = profile.subtitle,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = TextTertiary
+                                        )
+                                    }
+                                }
+
+                                // Demo Button
+                                OutlinedButton(
+                                    onClick = { ttsManager.playDemo(profile) },
+                                    shape = RoundedCornerShape(10.dp),
+                                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    border = BorderStroke(1.dp, LavenderPrimary.copy(alpha = 0.7f))
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.VolumeUp,
+                                        contentDescription = "Ouvir Demo",
+                                        tint = LavenderPrimary,
+                                        modifier = Modifier.size(15.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Demo",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                        color = LavenderPrimary,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Gemini API Card
         Card(
             modifier = Modifier.fillMaxWidth(),
