@@ -381,13 +381,13 @@ private fun GeneralSettingsTab(viewModel: TranscriberViewModel) {
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "VOZES MASCULINAS (4)",
+                            text = "VOZES MASCULINAS (8 DINÂMICAS)",
                             style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp, fontSize = 9.5.sp),
                             color = AmberGold,
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "Tom grave & profundo",
+                            text = "Perfis realistas & dinâmicos",
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                             color = TextTertiary
                         )

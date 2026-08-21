@@ -31,6 +31,87 @@ data class VoiceProfile(
 )
 
 object VoicePresets {
+    // 8 VOZES MASCULINAS DINÂMICAS E REAIS
+    val MASCULINE_1 = VoiceProfile(
+        id = "masc_1",
+        name = "Masculino 1 (Rodrigo)",
+        subtitle = "Barítono Noticioso • Firme & Confiante",
+        gender = VoiceGender.MASCULINE,
+        pitch = 0.85f,
+        speechRate = 0.98f,
+        sampleText = "Olá! Eu sou o Rodrigo. Esta é a minha voz masculina de barítono noticioso no Olho do Dumbo."
+    )
+
+    val MASCULINE_2 = VoiceProfile(
+        id = "masc_2",
+        name = "Masculino 2 (Tiago)",
+        subtitle = "Conversacional Fluido • Natural & Dinâmico",
+        gender = VoiceGender.MASCULINE,
+        pitch = 0.92f,
+        speechRate = 1.04f,
+        sampleText = "Olá! Eu sou o Tiago. Esta é a minha voz masculina natural e dinâmica para conversação diária."
+    )
+
+    val MASCULINE_3 = VoiceProfile(
+        id = "masc_3",
+        name = "Masculino 3 (Afonso)",
+        subtitle = "Narrador Solene • Muito Grave & Profundo",
+        gender = VoiceGender.MASCULINE,
+        pitch = 0.72f,
+        speechRate = 0.88f,
+        sampleText = "Olá! Eu sou o Afonso. Esta é a minha voz masculina solene, pausada e de tom profundo."
+    )
+
+    val MASCULINE_4 = VoiceProfile(
+        id = "masc_4",
+        name = "Masculino 4 (Diogo)",
+        subtitle = "Executivo Ágil • Enérgico & Rápido",
+        gender = VoiceGender.MASCULINE,
+        pitch = 0.98f,
+        speechRate = 1.14f,
+        sampleText = "Olá! Eu sou o Diogo. Esta é a minha voz executiva, ágil, direta e confiante."
+    )
+
+    val MASCULINE_5 = VoiceProfile(
+        id = "masc_5",
+        name = "Masculino 5 (Miguel)",
+        subtitle = "Caloroso & Empático • Tom Quente & Suave",
+        gender = VoiceGender.MASCULINE,
+        pitch = 0.88f,
+        speechRate = 0.94f,
+        sampleText = "Olá! Eu sou o Miguel. Esta é a minha voz masculina acolhedora, tranquila e empática."
+    )
+
+    val MASCULINE_6 = VoiceProfile(
+        id = "masc_6",
+        name = "Masculino 6 (Bernardo)",
+        subtitle = "Locutor de Rádio & Podcast • Ressonante",
+        gender = VoiceGender.MASCULINE,
+        pitch = 0.78f,
+        speechRate = 1.02f,
+        sampleText = "Olá! Eu sou o Bernardo. Esta é a minha voz encorpada de rádio e locução profissional."
+    )
+
+    val MASCULINE_7 = VoiceProfile(
+        id = "masc_7",
+        name = "Masculino 7 (Gabriel)",
+        subtitle = "Jovem & Espontâneo • Leve & Coloquial",
+        gender = VoiceGender.MASCULINE,
+        pitch = 1.04f,
+        speechRate = 1.10f,
+        sampleText = "Olá! Eu sou o Gabriel. Esta é a minha voz jovem, leve, descontraída e moderna."
+    )
+
+    val MASCULINE_8 = VoiceProfile(
+        id = "masc_8",
+        name = "Masculino 8 (Vasco)",
+        subtitle = "Clássico Autoritário • Sério & Imponente",
+        gender = VoiceGender.MASCULINE,
+        pitch = 0.66f,
+        speechRate = 0.85f,
+        sampleText = "Olá! Eu sou o Vasco. Esta é a minha voz clássica de grande autoridade e solidez."
+    )
+
     // 4 VOZES FEMININAS
     val FEMININE_1 = VoiceProfile(
         id = "fem_1",
@@ -47,8 +128,8 @@ object VoicePresets {
         name = "Feminino 2 (Inês)",
         subtitle = "Jovial, Expressiva & Dinâmica",
         gender = VoiceGender.FEMININE,
-        pitch = 1.38f,
-        speechRate = 1.10f,
+        pitch = 1.35f,
+        speechRate = 1.08f,
         sampleText = "Olá! Eu sou a Inês. Esta é a minha voz feminina jovial e enérgica."
     )
 
@@ -57,7 +138,7 @@ object VoicePresets {
         name = "Feminino 3 (Beatriz)",
         subtitle = "Serena, Elegante & Pausada",
         gender = VoiceGender.FEMININE,
-        pitch = 1.22f,
+        pitch = 1.18f,
         speechRate = 0.92f,
         sampleText = "Olá! Eu sou a Beatriz. Esta é a minha voz feminina serena e elegante."
     )
@@ -65,60 +146,22 @@ object VoicePresets {
     val FEMININE_4 = VoiceProfile(
         id = "fem_4",
         name = "Feminino 4 (Matilde)",
-        subtitle = "Vibrante, Calorosa & Aguda",
+        subtitle = "Vibrante, Calorosa & Luminosa",
         gender = VoiceGender.FEMININE,
-        pitch = 1.52f,
-        speechRate = 1.05f,
+        pitch = 1.45f,
+        speechRate = 1.04f,
         sampleText = "Olá! Eu sou a Matilde. Esta é a minha voz feminina vibrante e luminosa."
     )
 
-    // 4 VOZES MASCULINAS
-    val MASCULINE_1 = VoiceProfile(
-        id = "masc_1",
-        name = "Masculino 1 (Rodrigo)",
-        subtitle = "Muito Grave, Firme & Profundo",
-        gender = VoiceGender.MASCULINE,
-        pitch = 0.62f,
-        speechRate = 0.94f,
-        sampleText = "Olá! Eu sou o Rodrigo. Esta é a minha voz masculina grave e profunda no Olho do Dumbo."
+    val MASCULINE_VOICES = listOf(
+        MASCULINE_1, MASCULINE_2, MASCULINE_3, MASCULINE_4,
+        MASCULINE_5, MASCULINE_6, MASCULINE_7, MASCULINE_8
     )
-
-    val MASCULINE_2 = VoiceProfile(
-        id = "masc_2",
-        name = "Masculino 2 (Tiago)",
-        subtitle = "Natural, Fluido & Equilibrado",
-        gender = VoiceGender.MASCULINE,
-        pitch = 0.78f,
-        speechRate = 1.02f,
-        sampleText = "Olá! Eu sou o Tiago. Esta é a minha voz masculina natural e fluida."
-    )
-
-    val MASCULINE_3 = VoiceProfile(
-        id = "masc_3",
-        name = "Masculino 3 (Afonso)",
-        subtitle = "Pausado, Sério & Autoritário",
-        gender = VoiceGender.MASCULINE,
-        pitch = 0.68f,
-        speechRate = 0.88f,
-        sampleText = "Olá! Eu sou o Afonso. Esta é a minha voz masculina séria e pausada."
-    )
-
-    val MASCULINE_4 = VoiceProfile(
-        id = "masc_4",
-        name = "Masculino 4 (Diogo)",
-        subtitle = "Jovem, Enérgico & Rápido",
-        gender = VoiceGender.MASCULINE,
-        pitch = 0.86f,
-        speechRate = 1.12f,
-        sampleText = "Olá! Eu sou o Diogo. Esta é a minha voz masculina jovem e dinâmica."
-    )
-
     val FEMININE_VOICES = listOf(FEMININE_1, FEMININE_2, FEMININE_3, FEMININE_4)
-    val MASCULINE_VOICES = listOf(MASCULINE_1, MASCULINE_2, MASCULINE_3, MASCULINE_4)
-    val ALL = FEMININE_VOICES + MASCULINE_VOICES
+    val ALL = MASCULINE_VOICES + FEMININE_VOICES
 
     fun findById(id: String): VoiceProfile {
-        return ALL.firstOrNull { it.id == id } ?: FEMININE_1
+        return ALL.firstOrNull { it.id == id } ?: MASCULINE_1
     }
 }
 
@@ -196,19 +239,47 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
                     val matchingVoices = availableVoices.filter { voice ->
                         val vName = voice.name.lowercase()
                         when (profile.gender) {
-                            VoiceGender.MASCULINE -> (vName.contains("male") || vName.contains("ptm") || vName.contains("-m-") || vName.contains("man")) && !vName.contains("female")
-                            VoiceGender.FEMININE -> vName.contains("female") || vName.contains("fem") || vName.contains("ptf") || vName.contains("-f-") || vName.contains("woman")
+                            VoiceGender.MASCULINE -> (
+                                vName.contains("male") ||
+                                vName.contains("ptm") ||
+                                vName.contains("-m-") ||
+                                vName.contains("man") ||
+                                vName.contains("jfs") ||
+                                vName.contains("afs") ||
+                                vName.contains("male-") ||
+                                vName.contains("-male") ||
+                                vName.contains("#male")
+                            ) && !vName.contains("female") && !vName.contains("woman") && !vName.contains("fem")
+                            VoiceGender.FEMININE -> (
+                                vName.contains("female") ||
+                                vName.contains("fem") ||
+                                vName.contains("ptf") ||
+                                vName.contains("-f-") ||
+                                vName.contains("woman") ||
+                                vName.contains("lady") ||
+                                vName.contains("#female")
+                            )
                         }
                     }
                     if (matchingVoices.isNotEmpty()) {
+                        // Prioritize matching the current locale first (e.g. pt)
+                        val localeMatching = matchingVoices.filter {
+                            it.locale.language.equals("pt", ignoreCase = true)
+                        }
+                        val candidates = if (localeMatching.isNotEmpty()) localeMatching else matchingVoices
+                        
                         val index = when (profile.id) {
                             "fem_1", "masc_1" -> 0
                             "fem_2", "masc_2" -> 1
                             "fem_3", "masc_3" -> 2
                             "fem_4", "masc_4" -> 3
+                            "masc_5" -> 4
+                            "masc_6" -> 5
+                            "masc_7" -> 6
+                            "masc_8" -> 7
                             else -> 0
-                        } % matchingVoices.size
-                        tts.voice = matchingVoices[index]
+                        } % candidates.size
+                        tts.voice = candidates[index]
                     }
                 }
             } catch (e: Exception) {

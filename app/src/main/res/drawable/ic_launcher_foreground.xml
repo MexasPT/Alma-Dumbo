@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/olho_dumbo_icon_1787314695408"
+        android:drawable="@drawable/app_logo_clean_1787330143717"
         android:gravity="center" />
 </layer-list>

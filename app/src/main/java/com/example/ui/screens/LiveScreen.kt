@@ -347,7 +347,7 @@ fun LiveScreen(
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // View Mode Selector Tabs (Tratar como uma só vs Duas Colunas)
+        // View Mode Selector Tabs
         TabRow(
             selectedTabIndex = viewModeTab,
             containerColor = SophisticatedSurfaceVariant.copy(alpha = 0.8f),
@@ -383,7 +383,7 @@ fun LiveScreen(
                 onClick = { viewModeTab = 1 },
                 text = {
                     Text(
-                        text = "Duas Colunas (Topo Recente)",
+                        text = "Duas Colunas",
                         style = MaterialTheme.typography.labelMedium.copy(
                             fontSize = 12.sp,
                             fontWeight = if (viewModeTab == 1) FontWeight.Bold else FontWeight.Normal
@@ -424,7 +424,7 @@ fun LiveScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = if (viewModeTab == 0) "Sessão de Escuta contínua e unificada" else "Mais recentes no topo ⬆️",
+                        text = if (viewModeTab == 0) "Tradução em Português • Mais recente no topo ⬆️" else "Sessão unificada em 2 colunas contínuas",
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
                         color = TextTertiary
                     )
@@ -432,7 +432,7 @@ fun LiveScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         if (isTranslating) {
                             Text(
-                                text = "A traduzir em direto...",
+                                text = "A traduzir...",
                                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
                                 color = GlowLavender,
                                 modifier = Modifier.align(Alignment.CenterVertically)
@@ -443,9 +443,13 @@ fun LiveScreen(
                         IconButton(
                             onClick = {
                                 val fullOriginal = if (fullTranscript.isNotBlank() && partialText.isNotBlank()) "$fullTranscript $partialText" else fullTranscript.ifBlank { partialText }
-                                val fullPt = if (fullSessionTranslationPt.isNotBlank()) fullSessionTranslationPt else ptTranslation
+                                val fullPt = if (reversedSegments.isNotEmpty()) {
+                                    reversedSegments.joinToString("\n") { it.translationPt.ifBlank { it.text } }
+                                } else {
+                                    fullSessionTranslationPt.ifBlank { ptTranslation }
+                                }
                                 val copyText = buildString {
-                                    appendLine("=== ESCUTA SILENCIOSA (${detectedLanguageMeta.namePt.uppercase()}) ===")
+                                    appendLine("=== ESCUTA (${detectedLanguageMeta.namePt.uppercase()}) ===")
                                     appendLine(fullOriginal)
                                     appendLine()
                                     appendLine("=== TRADUÇÃO EM PORTUGUÊS ===")
@@ -454,7 +458,7 @@ fun LiveScreen(
                                 if (copyText.isNotBlank()) {
                                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     clipboard.setPrimaryClip(ClipData.newPlainText("Escuta Dumbo", copyText))
-                                    Toast.makeText(context, "Escuta e tradução copiadas!", Toast.LENGTH_SHORT).show()
+                                    Toast.makeText(context, "Tradução copiada!", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             modifier = Modifier.size(28.dp)
@@ -528,166 +532,414 @@ fun LiveScreen(
                     }
                 } else {
                     if (viewModeTab == 0) {
-                        // UNIFIED CONTINUOUS FLOW (Tratar como uma só tradução contínua)
-                        val combinedOriginal = if (fullTranscript.isNotBlank() && partialText.isNotBlank()) {
-                            "$fullTranscript $partialText"
-                        } else {
-                            fullTranscript.ifBlank { partialText }
-                        }
-                        val combinedPt = fullSessionTranslationPt.ifBlank { ptTranslation }.ifBlank { combinedOriginal }
-
-                        Column(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                        // 1 & 2: FLUXO ÚNICO CONTÍNUO (APENAS TRADUÇÃO PT - MAIS RECENTE NO TOPO)
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = LavenderContainer.copy(alpha = 0.35f),
+                            border = BorderStroke(1.dp, LavenderPrimary.copy(alpha = 0.45f)),
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            // Column 1: Detected original continuous stream
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = SophisticatedSurfaceVariant,
-                                border = BorderStroke(1.dp, SophisticatedOutline),
-                                modifier = Modifier.fillMaxWidth()
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(12.dp)
                             ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
+                                // Portuguese Header Banner with quick speak
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
                                     Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        Text(text = "🇵🇹", fontSize = 16.sp)
+                                        Text(
+                                            text = "TRADUÇÃO INTEGRAL EM PORTUGUÊS",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 9.5.sp,
+                                                letterSpacing = 1.sp
+                                            ),
+                                            color = AmberGold
+                                        )
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(4.dp))
+                                                .background(SophisticatedSurfaceVariant)
+                                                .padding(horizontal = 4.dp, vertical = 1.dp)
                                         ) {
-                                            Text(text = detectedLanguageMeta.flag, fontSize = 16.sp)
                                             Text(
-                                                text = "TEXTO ORIGINAL DETETADO (${detectedLanguageMeta.namePt.uppercase()})",
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 9.5.sp,
-                                                    letterSpacing = 1.sp
-                                                ),
+                                                text = "De: ${detectedLanguageMeta.flag} ${detectedLanguageMeta.namePt}",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
                                                 color = GlowLavender
                                             )
                                         }
-                                        if (isListening) {
+                                    }
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                        IconButton(
+                                            onClick = {
+                                                val textToSpeak = if (reversedSegments.isNotEmpty()) {
+                                                    reversedSegments.first().translationPt.ifBlank { reversedSegments.first().text }
+                                                } else {
+                                                    ptTranslation.ifBlank { fullSessionTranslationPt }
+                                                }
+                                                if (textToSpeak.isNotBlank()) {
+                                                    ttsManager.speak(textToSpeak, "pt-PT")
+                                                }
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.VolumeUp,
+                                                contentDescription = "Ouvir PT",
+                                                tint = LavenderPrimary,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = {
+                                                val fullPt = if (reversedSegments.isNotEmpty()) {
+                                                    reversedSegments.joinToString("\n\n") { it.translationPt.ifBlank { it.text } }
+                                                } else {
+                                                    fullSessionTranslationPt.ifBlank { ptTranslation }
+                                                }
+                                                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                                clipboard.setPrimaryClip(ClipData.newPlainText("Tradução PT", fullPt))
+                                                Toast.makeText(context, "Tradução copiada!", Toast.LENGTH_SHORT).show()
+                                            },
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.ContentCopy,
+                                                contentDescription = "Copiar PT",
+                                                tint = LavenderPrimary,
+                                                modifier = Modifier.size(15.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                // Continuous Lazy Column with newest translations on top
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // 1. Live speaking in-flight translation (at the very top)
+                                    if (partialText.isNotBlank() || (isListening && isTranslating)) {
+                                        item(key = "live_in_flight_pt") {
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = GlowLavender.copy(alpha = 0.18f),
+                                                border = BorderStroke(1.2.dp, GlowLavender),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(10.dp),
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .size(8.dp)
+                                                            .clip(CircleShape)
+                                                            .background(ListeningCoral)
+                                                    )
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = if (ptTranslation.isNotBlank()) ptTranslation else "A traduzir fala em tempo real...",
+                                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                                fontWeight = FontWeight.SemiBold,
+                                                                fontSize = 15.5.sp,
+                                                                lineHeight = 22.sp
+                                                            ),
+                                                            color = TextPrimary
+                                                        )
+                                                        Text(
+                                                            text = "Em direto agora • ${detectedLanguageMeta.flag} ${detectedLanguageMeta.code.uppercase()}",
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                            color = ListeningCoral
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // 2. Finalized translated segments (newest on top, older pushed down)
+                                    if (reversedSegments.isNotEmpty()) {
+                                        items(
+                                            items = reversedSegments,
+                                            key = { it.id }
+                                        ) { segment ->
+                                            val translated = segment.translationPt.ifBlank { segment.text }
+                                            val timeStr = remember(segment.timestampMs) {
+                                                val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                                                sdf.format(Date(segment.timestampMs))
+                                            }
+
+                                            Surface(
+                                                shape = RoundedCornerShape(10.dp),
+                                                color = SophisticatedSurfaceVariant.copy(alpha = 0.7f),
+                                                border = BorderStroke(0.6.dp, SophisticatedOutline.copy(alpha = 0.6f)),
+                                                modifier = Modifier.fillMaxWidth()
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                                    verticalAlignment = Alignment.Top,
+                                                    horizontalArrangement = Arrangement.SpaceBetween
+                                                ) {
+                                                    Column(modifier = Modifier.weight(1f)) {
+                                                        Text(
+                                                            text = translated,
+                                                            style = MaterialTheme.typography.bodyLarge.copy(
+                                                                fontWeight = FontWeight.Normal,
+                                                                fontSize = 15.sp,
+                                                                lineHeight = 21.sp
+                                                            ),
+                                                            color = TextPrimary
+                                                        )
+                                                        Spacer(modifier = Modifier.height(2.dp))
+                                                        Text(
+                                                            text = "$timeStr • ${segment.flagEmoji} ${segment.detectedLangName.ifBlank { segment.detectedLang.uppercase() }}",
+                                                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.5.sp),
+                                                            color = TextTertiary
+                                                        )
+                                                    }
+
+                                                    IconButton(
+                                                        onClick = { ttsManager.speak(translated, "pt-PT") },
+                                                        modifier = Modifier.size(22.dp)
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Default.VolumeUp,
+                                                            contentDescription = "Ouvir",
+                                                            tint = LavenderPrimary.copy(alpha = 0.8f),
+                                                            modifier = Modifier.size(13.dp)
+                                                        )
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    } else if (fullSessionTranslationPt.isNotBlank() || ptTranslation.isNotBlank()) {
+                                        // Fallback unified continuous block
+                                        val singleText = fullSessionTranslationPt.ifBlank { ptTranslation }
+                                        item {
                                             Text(
-                                                text = "A captar...",
-                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                                                text = singleText,
+                                                style = MaterialTheme.typography.bodyLarge.copy(
+                                                    fontWeight = FontWeight.Medium,
+                                                    fontSize = 15.5.sp,
+                                                    lineHeight = 22.sp
+                                                ),
+                                                color = TextPrimary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        // 3: DUAS COLUNAS (TRATAR COMO UMA SÓ SESSÃO CONTÍNUA UNIFICADA)
+                        // Side-by-side unified dual stream without confusing separate boxes
+                        Row(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(RoundedCornerShape(14.dp))
+                                .background(SophisticatedSurfaceVariant.copy(alpha = 0.5f))
+                                .border(1.dp, SophisticatedOutline, RoundedCornerShape(14.dp)),
+                            horizontalArrangement = Arrangement.spacedBy(0.dp)
+                        ) {
+                            // Column 1 (Left): Original Language Unified Continuous Stream
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .padding(8.dp)
+                            ) {
+                                // Left Column Header
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Text(text = detectedLanguageMeta.flag, fontSize = 13.sp)
+                                    Text(
+                                        text = "${detectedLanguageMeta.namePt.uppercase()} (ORIGINAL)",
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = GlowLavender,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // Unified Continuous Original Text List (Newest on top)
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (partialText.isNotBlank()) {
+                                        item(key = "active_original_col") {
+                                            Text(
+                                                text = partialText,
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontFamily = FontFamily.Serif,
+                                                    fontSize = 13.5.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                ),
                                                 color = ListeningCoral
                                             )
                                         }
                                     }
 
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    Text(
-                                        text = combinedOriginal,
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontFamily = FontFamily.Serif,
-                                            fontSize = 15.sp,
-                                            lineHeight = 22.sp
-                                        ),
-                                        color = TextPrimary
-                                    )
-                                }
-                            }
-
-                            // Column 2: Portuguese full continuous translation
-                            Surface(
-                                shape = RoundedCornerShape(14.dp),
-                                color = LavenderContainer.copy(alpha = 0.45f),
-                                border = BorderStroke(1.dp, LavenderPrimary.copy(alpha = 0.5f)),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Text(text = "🇵🇹", fontSize = 16.sp)
+                                    if (reversedSegments.isNotEmpty()) {
+                                        items(
+                                            items = reversedSegments,
+                                            key = { "orig_${it.id}" }
+                                        ) { segment ->
                                             Text(
-                                                text = "TRADUÇÃO INTEGRAL EM PORTUGUÊS (PT)",
-                                                style = MaterialTheme.typography.labelSmall.copy(
-                                                    fontWeight = FontWeight.Bold,
-                                                    fontSize = 9.5.sp,
-                                                    letterSpacing = 1.sp
+                                                text = segment.text,
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontFamily = FontFamily.Serif,
+                                                    fontSize = 13.sp,
+                                                    lineHeight = 18.sp
                                                 ),
-                                                color = AmberGold
+                                                color = TextPrimary
                                             )
                                         }
+                                    } else if (fullTranscript.isNotBlank()) {
+                                        item {
+                                            Text(
+                                                text = fullTranscript,
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontFamily = FontFamily.Serif,
+                                                    fontSize = 13.sp,
+                                                    lineHeight = 18.sp
+                                                ),
+                                                color = TextPrimary
+                                            )
+                                        }
+                                    }
+                                }
+                            }
 
-                                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                            IconButton(
-                                                onClick = {
-                                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                                    clipboard.setPrimaryClip(ClipData.newPlainText("Tradução PT", combinedPt))
-                                                    Toast.makeText(context, "Tradução copiada!", Toast.LENGTH_SHORT).show()
-                                                },
-                                                modifier = Modifier.size(24.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.ContentCopy,
-                                                    contentDescription = "Copiar PT",
-                                                    tint = LavenderPrimary,
-                                                    modifier = Modifier.size(15.dp)
-                                                )
+                            // Subtle Vertical Divider
+                            Box(
+                                modifier = Modifier
+                                    .width(1.dp)
+                                    .fillMaxHeight()
+                                    .background(SophisticatedOutline)
+                            )
+
+                            // Column 2 (Right): Portuguese Unified Continuous Stream
+                            Column(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .background(LavenderContainer.copy(alpha = 0.25f))
+                                    .padding(8.dp)
+                            ) {
+                                // Right Column Header
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(text = "🇵🇹", fontSize = 13.sp)
+                                        Text(
+                                            text = "PORTUGUÊS (TRADUÇÃO)",
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold
+                                            ),
+                                            color = AmberGold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            val fullPt = if (reversedSegments.isNotEmpty()) {
+                                                reversedSegments.joinToString("\n") { it.translationPt.ifBlank { it.text } }
+                                            } else {
+                                                fullSessionTranslationPt.ifBlank { ptTranslation }
                                             }
+                                            if (fullPt.isNotBlank()) {
+                                                ttsManager.speak(fullPt, "pt-PT")
+                                            }
+                                        },
+                                        modifier = Modifier.size(20.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.VolumeUp,
+                                            contentDescription = "Ouvir",
+                                            tint = LavenderPrimary,
+                                            modifier = Modifier.size(13.dp)
+                                        )
+                                    }
+                                }
+
+                                Spacer(modifier = Modifier.height(6.dp))
+
+                                // Unified Continuous Portuguese Text List (Newest on top)
+                                LazyColumn(
+                                    modifier = Modifier.fillMaxSize(),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (ptTranslation.isNotBlank()) {
+                                        item(key = "active_pt_col") {
+                                            Text(
+                                                text = ptTranslation,
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontSize = 13.5.sp,
+                                                    fontWeight = FontWeight.SemiBold
+                                                ),
+                                                color = GlowLavender
+                                            )
                                         }
                                     }
 
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    Text(
-                                        text = combinedPt,
-                                        style = MaterialTheme.typography.bodyLarge.copy(
-                                            fontWeight = FontWeight.Medium,
-                                            fontSize = 15.sp,
-                                            lineHeight = 22.sp
-                                        ),
-                                        color = TextPrimary
-                                    )
-                                }
-                            }
-                        }
-                    } else {
-                        // TWO-COLUMN REVERSE CHRONOLOGICAL LIST (Newest at TOP)
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            if (partialText.isNotBlank()) {
-                                item(key = "active_speaking_row") {
-                                    ActiveSpeakingLiveRow(
-                                        partialText = partialText,
-                                        ptTranslation = ptTranslation,
-                                        isTranslating = isTranslating,
-                                        detectedLang = activeLangCode,
-                                        flag = detectedLanguageMeta.flag
-                                    )
-                                }
-                            }
-
-                            items(
-                                items = reversedSegments,
-                                key = { it.id }
-                            ) { segment ->
-                                TwoColumnDialogueItem(
-                                    segment = segment,
-                                    onSpeak = { textToSpeak ->
-                                        ttsManager.speak(textToSpeak, "pt-PT")
-                                    },
-                                    onCopy = { textToCopy ->
-                                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                        clipboard.setPrimaryClip(ClipData.newPlainText("Live Segment", textToCopy))
-                                        Toast.makeText(context, "Texto copiado!", Toast.LENGTH_SHORT).show()
+                                    if (reversedSegments.isNotEmpty()) {
+                                        items(
+                                            items = reversedSegments,
+                                            key = { "pt_${it.id}" }
+                                        ) { segment ->
+                                            Text(
+                                                text = segment.translationPt.ifBlank { segment.text },
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontSize = 13.sp,
+                                                    lineHeight = 18.sp
+                                                ),
+                                                color = TextPrimary
+                                            )
+                                        }
+                                    } else if (fullSessionTranslationPt.isNotBlank()) {
+                                        item {
+                                            Text(
+                                                text = fullSessionTranslationPt,
+                                                style = MaterialTheme.typography.bodyMedium.copy(
+                                                    fontSize = 13.sp,
+                                                    lineHeight = 18.sp
+                                                ),
+                                                color = TextPrimary
+                                            )
+                                        }
                                     }
-                                )
+                                }
                             }
                         }
                     }
