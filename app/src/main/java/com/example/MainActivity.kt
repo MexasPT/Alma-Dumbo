@@ -183,7 +183,7 @@ fun MainApp(
                 0 -> RecordScreen(viewModel = viewModel)
                 1 -> LiveScreen(viewModel = viewModel)
                 2 -> HistoryScreen(viewModel = viewModel)
-                3 -> LanguagesCatalogScreen()
+                3 -> LanguagesCatalogScreen(viewModel = viewModel)
                 4 -> SettingsScreen(viewModel = viewModel)
             }
         }

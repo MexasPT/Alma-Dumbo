@@ -117,6 +117,10 @@ fun LiveScreen(
     val rmsLevel by liveManager.rmsLevel.collectAsState()
     val activeLangCode by liveManager.activeLanguage.collectAsState()
 
+    val detectedLanguageMeta by liveManager.detectedLanguageMeta.collectAsState()
+    val detectionConfidence by liveManager.detectionConfidence.collectAsState()
+    val isAutoDetectActive by liveManager.isAutoDetectActive.collectAsState()
+
     val ptTranslation by viewModel.livePortugueseTranslation.collectAsState()
     val isTranslating by viewModel.isLiveTranslating.collectAsState()
 
@@ -137,7 +141,7 @@ fun LiveScreen(
     ) { granted ->
         hasAudioPermission = granted
         if (granted) {
-            liveManager.startLiveListening(activeLangCode)
+            liveManager.startLiveListening()
         } else {
             Toast.makeText(context, "Permissão de microfone necessária para escuta em direto.", Toast.LENGTH_LONG).show()
         }
@@ -202,67 +206,107 @@ fun LiveScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Language Quick Switch Carousel
-        Text(
-            text = "IDIOMA FALADO (ENTRADA):",
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp, letterSpacing = 1.5.sp),
-            color = TextTertiary,
-            fontWeight = FontWeight.Bold
-        )
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        val languages = listOf(
-            "pt-PT" to "🇵🇹 Português (PT)",
-            "pt-BR" to "🇧🇷 Português (BR)",
-            "es-ES" to "🇪🇸 Castelhano / Espanhol",
-            "fr-FR" to "🇫🇷 Francês",
-            "en-US" to "🇬🇧 Inglês",
-            "it-IT" to "🇮🇹 Italiano",
-            "de-DE" to "🇩🇪 Alemão",
-            "nl-NL" to "🇳🇱 Holandês",
-            "hr-HR" to "🇭🇷 Croata",
-            "sq-AL" to "🇦🇱 Albanês",
-            "da-DK" to "🇩🇰 Dinamarquês",
-            "fi-FI" to "🇫🇮 Finlandês",
-            "ar-SA" to "🇸🇦 Árabe",
-            "ur-PK" to "🇵🇰 Urdu",
-            "hi-IN" to "🇮🇳 Hindi",
-            "uk-UA" to "🇺🇦 Ucraniano",
-            "ro-RO" to "🇷🇴 Romeno / Moldavo",
-            "zh-CN" to "🇨🇳 Chinês",
-            "ja-JP" to "🇯🇵 Japonês",
-            "ko-KR" to "🇰🇷 Coreano"
-        )
-
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        // Automatic Language Detection Banner (No manual selection needed)
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = SophisticatedSurface,
+            border = BorderStroke(
+                1.dp,
+                if (isListening) GlowLavender.copy(alpha = 0.7f) else SophisticatedOutline
+            )
         ) {
-            languages.forEach { (code, label) ->
-                val isSelected = activeLangCode == code
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isSelected) LavenderContainer else SophisticatedSurfaceVariant,
-                    border = BorderStroke(
-                        1.dp,
-                        if (isSelected) LavenderPrimary else SophisticatedOutline.copy(alpha = 0.5f)
-                    ),
-                    modifier = Modifier.clickable {
-                        liveManager.setLanguage(code)
-                    }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.weight(1f)
                 ) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isSelected) LavenderOnContainer else TextSecondary,
-                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(LavenderContainer.copy(alpha = 0.6f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = detectedLanguageMeta.flag,
+                            fontSize = 20.sp
+                        )
+                    }
+
+                    Column {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = "IDIOMA FALADO DETETADO",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontSize = 9.sp,
+                                    letterSpacing = 1.2.sp
+                                ),
+                                color = TextSecondary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(LavenderPrimary.copy(alpha = 0.18f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            ) {
+                                Text(
+                                    text = "AUTO",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                                    color = LavenderPrimary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(2.dp))
+
+                        Text(
+                            text = "${detectedLanguageMeta.namePt} (${detectedLanguageMeta.code.uppercase()})",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = TextPrimary
+                        )
+                    }
+                }
+
+                // Confidence badge
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = EmeraldSuccess.copy(alpha = 0.15f),
+                    border = BorderStroke(0.8.dp, EmeraldSuccess.copy(alpha = 0.5f))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(5.dp)
+                                .clip(CircleShape)
+                                .background(EmeraldSuccess)
+                        )
+                        Text(
+                            text = "${(detectionConfidence * 100).toInt()}% Confiança",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.5.sp),
+                            color = EmeraldSuccess,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }

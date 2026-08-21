@@ -11,6 +11,7 @@ import com.example.audio.AudioRecorderManager
 import com.example.audio.LiveSpeechManager
 import com.example.audio.PlaybackInfo
 import com.example.audio.SupportedLanguages
+import com.example.audio.TtsManager
 import com.example.data.db.AppDatabase
 import com.example.data.db.TranscriptionEntity
 import com.example.location.LocationHelper
@@ -66,6 +67,7 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
     val recorderManager = AudioRecorderManager(application)
     val playbackManager = AudioPlaybackManager(application)
     val liveSpeechManager = LiveSpeechManager(application, viewModelScope)
+    val ttsManager = TtsManager(application)
 
     private val sharedPrefs = application.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
@@ -673,6 +675,7 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
         recorderManager.cancelRecording()
         playbackManager.stop()
         liveSpeechManager.destroy()
+        ttsManager.shutdown()
     }
 
     private fun formatTimestamp(millis: Long): String {

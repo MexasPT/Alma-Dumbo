@@ -57,8 +57,17 @@ class LiveSpeechManager(
     private val _rmsLevel = MutableStateFlow(0f)
     val rmsLevel: StateFlow<Float> = _rmsLevel.asStateFlow()
 
-    private val _activeLanguage = MutableStateFlow("pt-PT")
+    private val _activeLanguage = MutableStateFlow("pt")
     val activeLanguage: StateFlow<String> = _activeLanguage.asStateFlow()
+
+    private val _detectedLanguageMeta = MutableStateFlow<LanguageMeta>(SupportedLanguages.ALL.first())
+    val detectedLanguageMeta: StateFlow<LanguageMeta> = _detectedLanguageMeta.asStateFlow()
+
+    private val _detectionConfidence = MutableStateFlow(0.96f)
+    val detectionConfidence: StateFlow<Float> = _detectionConfidence.asStateFlow()
+
+    private val _isAutoDetectActive = MutableStateFlow(true)
+    val isAutoDetectActive: StateFlow<Boolean> = _isAutoDetectActive.asStateFlow()
 
     private var shouldKeepListening = false
     private var restartRunnable: Runnable? = null
@@ -127,6 +136,7 @@ class LiveSpeechManager(
                 if (!matches.isNullOrEmpty()) {
                     val text = matches[0].trim()
                     if (text.isNotBlank()) {
+                        processAutoDetection(text)
                         commitSegment(text)
                     }
                 }
@@ -142,7 +152,11 @@ class LiveSpeechManager(
             override fun onPartialResults(partialResults: Bundle?) {
                 val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 if (!matches.isNullOrEmpty()) {
-                    _partialText.value = matches[0]
+                    val text = matches[0].trim()
+                    _partialText.value = text
+                    if (text.length >= 3) {
+                        processAutoDetection(text)
+                    }
                 }
             }
 
@@ -150,13 +164,34 @@ class LiveSpeechManager(
         }
     }
 
-    fun startLiveListening(langCode: String = _activeLanguage.value) {
-        _activeLanguage.value = langCode
+    private fun processAutoDetection(text: String) {
+        if (!_isAutoDetectActive.value || text.isBlank()) return
+
+        val result = LanguageAutoDetector.detect(text)
+        val meta = SupportedLanguages.findByCode(result.languageCode)
+            ?: SupportedLanguages.findByNameOrCode(result.languageName)
+            ?: SupportedLanguages.ALL.first()
+
+        _detectedLanguageMeta.value = meta
+        _detectionConfidence.value = result.confidence
+
+        if (_activeLanguage.value != result.languageCode && result.confidence > 0.70f) {
+            _activeLanguage.value = result.languageCode
+            Log.d(TAG, "Auto-detected language changed to: ${meta.namePt} (${meta.flag}) with confidence: ${result.confidence}")
+        }
+    }
+
+    fun startLiveListening(initialLangCode: String? = null) {
+        if (initialLangCode != null) {
+            _activeLanguage.value = initialLangCode
+            val meta = SupportedLanguages.findByCode(initialLangCode) ?: SupportedLanguages.ALL.first()
+            _detectedLanguageMeta.value = meta
+        }
         shouldKeepListening = true
         _status.value = LiveStatus.Listening
 
         mainHandler.post {
-            startListeningInternal(langCode)
+            startListeningInternal(_activeLanguage.value)
         }
     }
 
@@ -169,8 +204,9 @@ class LiveSpeechManager(
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, langCode)
+                putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+                // Use broad multi-language matching and fallback preference
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, langCode)
                 putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
                 putExtra("android.speech.extra.DICTATION_MODE", true)
             }

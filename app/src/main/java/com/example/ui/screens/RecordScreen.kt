@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
@@ -55,6 +56,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.audio.SupportedLanguages
 import com.example.data.db.TranscriptionEntity
+import com.example.smtp.SmtpResult
 import com.example.ui.components.AudioPlayerCard
 import com.example.ui.components.LanguageBadge
 import com.example.ui.components.LiveAudioWaveform
@@ -80,6 +83,7 @@ import com.example.ui.components.MicrophonePermissionBanner
 import com.example.ui.components.MicrophonePermissionWrapper
 import com.example.ui.components.RecordingPulseRing
 import com.example.ui.components.ScriptTag
+import com.example.ui.components.SmtpSendDialog
 import com.example.ui.components.formatDuration
 import com.example.ui.theme.DeepPurpleOnPrimary
 import com.example.ui.theme.GlowLavender
@@ -109,8 +113,41 @@ fun RecordScreen(
     val recordingDurationMs by viewModel.recorderManager.recordingDurationMs.collectAsState()
     val amplitudeHistory by viewModel.recorderManager.amplitudeHistory.collectAsState()
     val playbackInfo by viewModel.playbackState.collectAsState()
+    val smtpConfig by viewModel.smtpConfig.collectAsState()
+    val smtpState by viewModel.smtpState.collectAsState()
+
+    var recordToSendSmtp by remember { mutableStateOf<TranscriptionEntity?>(null) }
 
     val isLiveRecording = recordingState is RecordingUiState.Recording
+
+    // SMTP Dialog on Record Screen
+    recordToSendSmtp?.let { record ->
+        SmtpSendDialog(
+            record = record,
+            defaultRecipient = smtpConfig.defaultRecipient,
+            isSmtpConfigured = smtpConfig.host.isNotBlank(),
+            smtpState = smtpState,
+            onDismiss = { recordToSendSmtp = null },
+            onSend = { targetEmail, includeAudio, includeLocation ->
+                viewModel.sendRecordViaSmtp(
+                    record = record,
+                    recipientEmail = targetEmail,
+                    includeAudio = includeAudio,
+                    includeLocation = includeLocation
+                ) { result ->
+                    when (result) {
+                        is SmtpResult.Success -> {
+                            Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+                            recordToSendSmtp = null
+                        }
+                        is SmtpResult.Failure -> {
+                            Toast.makeText(context, "Erro: ${result.errorMessage}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                }
+            }
+        )
+    }
 
     MicrophonePermissionWrapper(
         onPermissionGranted = {
@@ -216,6 +253,7 @@ fun RecordScreen(
                             onSeek = { viewModel.seekAudio(it) },
                             onSpeedChange = { viewModel.setPlaybackSpeed(it) },
                             onToggleFavorite = { viewModel.toggleFavorite(state.record) },
+                            onSendSmtp = { recordToSendSmtp = state.record },
                             onRecordAnother = { viewModel.resetRecordingState() }
                         )
                     }
@@ -564,6 +602,7 @@ private fun ResultSuccessSurface(
     onSeek: (Long) -> Unit,
     onSpeedChange: (Float) -> Unit,
     onToggleFavorite: () -> Unit,
+    onSendSmtp: () -> Unit,
     onRecordAnother: () -> Unit
 ) {
     val context = LocalContext.current
@@ -726,6 +765,36 @@ private fun ResultSuccessSurface(
 
             Spacer(modifier = Modifier.height(18.dp))
 
+            // Send via SMTP Primary Button
+            Button(
+                onClick = onSendSmtp,
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = LavenderPrimary,
+                    contentColor = DeepPurpleOnPrimary
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("record_screen_send_smtp_button")
+            ) {
+                Icon(
+                    imageVector = androidx.compose.material.icons.Icons.Default.Email,
+                    contentDescription = null,
+                    tint = DeepPurpleOnPrimary,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Enviar Registo via Email (SMTP)",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = DeepPurpleOnPrimary
+                )
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
             // Action Buttons (Copy, Share)
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -784,23 +853,20 @@ private fun ResultSuccessSurface(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            Button(
+            OutlinedButton(
                 onClick = onRecordAnother,
                 modifier = Modifier
                     .fillMaxWidth()
                     .testTag("record_another_button"),
                 shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = LavenderPrimary,
-                    contentColor = DeepPurpleOnPrimary
-                )
+                border = androidx.compose.foundation.BorderStroke(1.dp, LavenderPrimary.copy(alpha = 0.5f))
             ) {
-                Icon(imageVector = Icons.Default.Mic, contentDescription = null, tint = DeepPurpleOnPrimary)
+                Icon(imageVector = Icons.Default.Mic, contentDescription = null, tint = LavenderPrimary)
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     text = "Gravar Novo Áudio",
-                    fontWeight = FontWeight.Bold,
-                    color = DeepPurpleOnPrimary
+                    fontWeight = FontWeight.SemiBold,
+                    color = LavenderPrimary
                 )
             }
         }
