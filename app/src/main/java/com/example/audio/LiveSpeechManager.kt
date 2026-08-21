@@ -259,6 +259,16 @@ class LiveSpeechManager(
         }
     }
 
+    fun updateSegmentTranslation(segmentId: String, translationPt: String) {
+        _segments.value = _segments.value.map { seg ->
+            if (seg.id == segmentId) {
+                seg.copy(translationPt = translationPt)
+            } else {
+                seg
+            }
+        }
+    }
+
     private fun commitSegment(text: String) {
         val current = _fullTranscript.value
         val updated = if (current.isBlank()) text else "$current\n$text"
@@ -266,7 +276,8 @@ class LiveSpeechManager(
 
         val segment = LiveTranscriptSegment(
             text = text,
-            timestampMs = System.currentTimeMillis()
+            timestampMs = System.currentTimeMillis(),
+            detectedLang = _activeLanguage.value
         )
         _segments.value = _segments.value + segment
     }

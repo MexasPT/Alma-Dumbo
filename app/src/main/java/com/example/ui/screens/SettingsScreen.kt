@@ -281,14 +281,25 @@ private fun GeneralSettingsTab(viewModel: TranscriberViewModel) {
                 // Voices list with Gender sections
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     // Feminine Section
-                    Text(
-                        text = "VOZES FEMININAS",
-                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp, fontSize = 9.5.sp),
-                        color = GlowLavender,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "VOZES FEMININAS (4)",
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp, fontSize = 9.5.sp),
+                            color = GlowLavender,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Toque em 'Demo' p/ ouvir",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            color = TextTertiary
+                        )
+                    }
 
-                    listOf(com.example.audio.VoicePresets.FEMININE_1, com.example.audio.VoicePresets.FEMININE_2).forEach { profile ->
+                    com.example.audio.VoicePresets.FEMININE_VOICES.forEach { profile ->
                         val isSelected = currentProfile.id == profile.id
                         Surface(
                             modifier = Modifier
@@ -356,17 +367,28 @@ private fun GeneralSettingsTab(viewModel: TranscriberViewModel) {
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
 
                     // Masculine Section
-                    Text(
-                        text = "VOZES MASCULINAS",
-                        style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp, fontSize = 9.5.sp),
-                        color = AmberGold,
-                        fontWeight = FontWeight.Bold
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "VOZES MASCULINAS (4)",
+                            style = MaterialTheme.typography.labelSmall.copy(letterSpacing = 1.2.sp, fontSize = 9.5.sp),
+                            color = AmberGold,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text(
+                            text = "Tom grave & profundo",
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                            color = TextTertiary
+                        )
+                    }
 
-                    listOf(com.example.audio.VoicePresets.MASCULINE_1, com.example.audio.VoicePresets.MASCULINE_2).forEach { profile ->
+                    com.example.audio.VoicePresets.MASCULINE_VOICES.forEach { profile ->
                         val isSelected = currentProfile.id == profile.id
                         Surface(
                             modifier = Modifier

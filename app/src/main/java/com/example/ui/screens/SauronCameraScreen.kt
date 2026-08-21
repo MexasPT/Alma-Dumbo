@@ -6,7 +6,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Rect
-import android.graphics.RectF
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -21,6 +20,12 @@ import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
@@ -28,7 +33,6 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -42,11 +46,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -54,7 +56,6 @@ import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.FlashOff
 import androidx.compose.material.icons.filled.FlashOn
-import androidx.compose.material.icons.filled.FlipCameraAndroid
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -76,6 +77,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -107,10 +110,8 @@ import com.example.ui.theme.DeepPurpleOnPrimary
 import com.example.ui.theme.EmeraldSuccess
 import com.example.ui.theme.GlowLavender
 import com.example.ui.theme.LavenderContainer
-import com.example.ui.theme.LavenderOnContainer
 import com.example.ui.theme.LavenderPrimary
 import com.example.ui.theme.ListeningCoral
-import com.example.ui.theme.ListeningCoralContainer
 import com.example.ui.theme.SophisticatedBackground
 import com.example.ui.theme.SophisticatedOutline
 import com.example.ui.theme.SophisticatedSurface
@@ -123,18 +124,24 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 import kotlin.math.roundToInt
 
 private const val TAG = "SauronCamera"
+private const val PERSISTENCE_DURATION_MS = 5000L // Keep translated words visible for 5 seconds
 
-data class DetectedTextItem(
+data class SauronTrackedWord(
     val id: String = java.util.UUID.randomUUID().toString(),
     val originalText: String,
-    val translatedText: String = "",
-    val boundingBox: Rect? = null,
+    val translatedText: String,
+    val normLeft: Float,
+    val normTop: Float,
+    val normRight: Float,
+    val normBottom: Float,
+    val lastSeenMs: Long = System.currentTimeMillis(),
     val sourceLang: String = "auto"
 )
 
@@ -171,12 +178,28 @@ fun SauronCameraScreen(
     var lensFacing by remember { mutableIntStateOf(CameraSelector.LENS_FACING_BACK) }
     var isFrozen by remember { mutableStateOf(false) }
 
-    var detectedItems by remember { mutableStateOf<List<DetectedTextItem>>(emptyList()) }
+    // Map of persistent tracked words
+    val trackedWordsMap = remember { mutableStateMapOf<String, SauronTrackedWord>() }
+    var currentTimeMs by remember { mutableLongStateOf(System.currentTimeMillis()) }
+
     var targetLanguage by remember { mutableStateOf(SupportedLanguages.findByCode("pt-PT") ?: SupportedLanguages.ALL.first()) }
-    var isTranslating by remember { mutableStateOf(false) }
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     val textRecognizer = remember { TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS) }
+
+    // Timer loop to cleanly purge expired words after 5 seconds
+    LaunchedEffect(isFrozen) {
+        while (true) {
+            delay(300)
+            if (!isFrozen) {
+                currentTimeMs = System.currentTimeMillis()
+                val expiredKeys = trackedWordsMap.filter { (key, item) ->
+                    (currentTimeMs - item.lastSeenMs) > PERSISTENCE_DURATION_MS
+                }.keys
+                expiredKeys.forEach { trackedWordsMap.remove(it) }
+            }
+        }
+    }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -229,7 +252,7 @@ fun SauronCameraScreen(
             Spacer(modifier = Modifier.height(10.dp))
 
             Text(
-                text = "O Olho de Sauron necessita de acesso à câmara do telemóvel para ler e traduzir texto impresso ou digital em tempo real diretamente no ecrã.",
+                text = "O Olho de Sauron necessita de acesso à câmara para ler e traduzir texto impresso ou digital em tempo real diretamente por cima de cada palavra.",
                 style = MaterialTheme.typography.bodyMedium,
                 color = TextSecondary,
                 textAlign = TextAlign.Center
@@ -253,12 +276,24 @@ fun SauronCameraScreen(
         return
     }
 
-    Box(
+    // Active words currently within 5s persistence window
+    val activeVisibleWords = remember(currentTimeMs, trackedWordsMap.values.toList(), isFrozen) {
+        if (isFrozen) {
+            trackedWordsMap.values.toList()
+        } else {
+            trackedWordsMap.values.filter { (currentTimeMs - it.lastSeenMs) <= PERSISTENCE_DURATION_MS }
+        }
+    }
+
+    BoxWithConstraints(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Camera Preview
+        val screenWidthPx = constraints.maxWidth.toFloat()
+        val screenHeightPx = constraints.maxHeight.toFloat()
+
+        // 1. Camera View
         AndroidView(
             factory = { ctx ->
                 val previewView = PreviewView(ctx).apply {
@@ -279,14 +314,36 @@ fun SauronCameraScreen(
 
                     imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
                         if (!isFrozen) {
-                            processImageProxy(
+                            processImageProxyFocused(
                                 imageProxy = imageProxy,
                                 recognizer = textRecognizer,
                                 targetLang = targetLanguage.code,
                                 viewModel = viewModel,
                                 scope = scope,
-                                onDetected = { items ->
-                                    detectedItems = items
+                                onNewWordsDetected = { newWords ->
+                                    val now = System.currentTimeMillis()
+                                    newWords.forEach { item ->
+                                        val existingKey = trackedWordsMap.keys.firstOrNull { k ->
+                                            val existing = trackedWordsMap[k]
+                                            existing != null && (
+                                                existing.originalText.equals(item.originalText, ignoreCase = true) ||
+                                                (kotlin.math.abs(existing.normLeft - item.normLeft) < 0.08f &&
+                                                 kotlin.math.abs(existing.normTop - item.normTop) < 0.08f)
+                                            )
+                                        }
+                                        if (existingKey != null) {
+                                            val old = trackedWordsMap[existingKey]!!
+                                            trackedWordsMap[existingKey] = old.copy(
+                                                normLeft = (old.normLeft * 0.4f + item.normLeft * 0.6f),
+                                                normTop = (old.normTop * 0.4f + item.normTop * 0.6f),
+                                                normRight = (old.normRight * 0.4f + item.normRight * 0.6f),
+                                                normBottom = (old.normBottom * 0.4f + item.normBottom * 0.6f),
+                                                lastSeenMs = now
+                                            )
+                                        } else {
+                                            trackedWordsMap[item.id] = item.copy(lastSeenMs = now)
+                                        }
+                                    }
                                 }
                             )
                         } else {
@@ -316,37 +373,135 @@ fun SauronCameraScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Overlay glowing viewfinder effect & bounding box indicators
+        // Laser scan line animation
+        val infiniteTransition = rememberInfiniteTransition(label = "scan_laser")
+        val laserProgress by infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(2200, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "laser_y"
+        )
+
+        // 2. Focused Scan Area Viewfinder & Dimming Overlay
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val strokeColor = GlowLavender.copy(alpha = 0.5f)
-            val cornerLength = 40.dp.toPx()
+            val strokeColor = ListeningCoral
             val strokeWidth = 3.dp.toPx()
+            val cornerLength = 32.dp.toPx()
 
-            // Center targeting brackets
-            val cx = size.width / 2f
-            val cy = size.height / 2.3f
-            val boxW = size.width * 0.85f
-            val boxH = size.height * 0.45f
-            val left = cx - boxW / 2f
-            val top = cy - boxH / 2f
-            val right = left + boxW
-            val bottom = top + boxH
+            // Focused Central Reticle: Width 65%, Height 28%
+            val reticleW = size.width * 0.68f
+            val reticleH = size.height * 0.28f
+            val reticleLeft = (size.width - reticleW) / 2f
+            val reticleTop = size.height * 0.32f
+            val reticleRight = reticleLeft + reticleW
+            val reticleBottom = reticleTop + reticleH
 
+            // Draw 4 distinct corner brackets
             // Top-left
-            drawLine(strokeColor, Offset(left, top), Offset(left + cornerLength, top), strokeWidth)
-            drawLine(strokeColor, Offset(left, top), Offset(left, top + cornerLength), strokeWidth)
+            drawLine(strokeColor, Offset(reticleLeft, reticleTop), Offset(reticleLeft + cornerLength, reticleTop), strokeWidth)
+            drawLine(strokeColor, Offset(reticleLeft, reticleTop), Offset(reticleLeft, reticleTop + cornerLength), strokeWidth)
             // Top-right
-            drawLine(strokeColor, Offset(right, top), Offset(right - cornerLength, top), strokeWidth)
-            drawLine(strokeColor, Offset(right, top), Offset(right, top + cornerLength), strokeWidth)
+            drawLine(strokeColor, Offset(reticleRight, reticleTop), Offset(reticleRight - cornerLength, reticleTop), strokeWidth)
+            drawLine(strokeColor, Offset(reticleRight, reticleTop), Offset(reticleRight, reticleTop + cornerLength), strokeWidth)
             // Bottom-left
-            drawLine(strokeColor, Offset(left, bottom), Offset(left + cornerLength, bottom), strokeWidth)
-            drawLine(strokeColor, Offset(left, bottom), Offset(left, bottom - cornerLength), strokeWidth)
+            drawLine(strokeColor, Offset(reticleLeft, reticleBottom), Offset(reticleLeft + cornerLength, reticleBottom), strokeWidth)
+            drawLine(strokeColor, Offset(reticleLeft, reticleBottom), Offset(reticleLeft, reticleBottom - cornerLength), strokeWidth)
             // Bottom-right
-            drawLine(strokeColor, Offset(right, bottom), Offset(right - cornerLength, bottom), strokeWidth)
-            drawLine(strokeColor, Offset(right, bottom), Offset(right, bottom - cornerLength), strokeWidth)
+            drawLine(strokeColor, Offset(reticleRight, reticleBottom), Offset(reticleRight - cornerLength, reticleBottom), strokeWidth)
+            drawLine(strokeColor, Offset(reticleRight, reticleBottom), Offset(reticleRight, reticleBottom - cornerLength), strokeWidth)
+
+            // Scanning laser line moving inside the reticle
+            if (!isFrozen) {
+                val laserY = reticleTop + (reticleH * laserProgress)
+                drawLine(
+                    color = GlowLavender.copy(alpha = 0.85f),
+                    start = Offset(reticleLeft + 4.dp.toPx(), laserY),
+                    end = Offset(reticleRight - 4.dp.toPx(), laserY),
+                    strokeWidth = 2.5.dp.toPx()
+                )
+            }
         }
 
-        // Top HUD Controls
+        // Label above the focused scan reticle
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .offset(y = (screenHeightPx * 0.28f / context.resources.displayMetrics.density).dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = Color.Black.copy(alpha = 0.65f),
+                border = BorderStroke(0.8.dp, ListeningCoral.copy(alpha = 0.7f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(5.dp)
+                            .clip(CircleShape)
+                            .background(ListeningCoral)
+                    )
+                    Text(
+                        text = "ÁREA DE LEITURA FOCADA",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            fontSize = 8.5.sp,
+                            letterSpacing = 1.2.sp,
+                            fontWeight = FontWeight.Bold
+                        ),
+                        color = Color.White
+                    )
+                }
+            }
+        }
+
+        // 3. AR OVERLAY: Translations positioned DIRECTLY ON TOP OF DETECTED WORDS
+        activeVisibleWords.forEach { word ->
+            val xDp = ((word.normLeft * screenWidthPx) / context.resources.displayMetrics.density).dp
+            val yDp = ((word.normTop * screenHeightPx) / context.resources.displayMetrics.density).dp
+
+            // AR Translated Tag directly over the word
+            Box(
+                modifier = Modifier
+                    .offset(x = xDp.coerceAtLeast(8.dp), y = (yDp - 14.dp).coerceAtLeast(70.dp))
+                    .clickable {
+                        ttsManager.speak(word.translatedText, targetLanguage.code)
+                    }
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color.Black.copy(alpha = 0.88f),
+                    border = BorderStroke(1.2.dp, GlowLavender),
+                    shadowElevation = 4.dp
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = targetLanguage.flag,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = word.translatedText,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            ),
+                            color = GlowLavender
+                        )
+                    }
+                }
+            }
+        }
+
+        // 4. TOP HUD (Controls & Language Selector)
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -354,13 +509,13 @@ fun SauronCameraScreen(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Black.copy(alpha = 0.85f),
-                            Color.Black.copy(alpha = 0.4f),
+                            Color.Black.copy(alpha = 0.88f),
+                            Color.Black.copy(alpha = 0.5f),
                             Color.Transparent
                         )
                     )
                 )
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -394,7 +549,7 @@ fun SauronCameraScreen(
                             fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = if (isFrozen) "Imagem Fixada (Pausa)" else "Tradução em Tempo Real",
+                            text = if (isFrozen) "Imagem Fixada (Pausa)" else "Tradução Sobreposta (AR)",
                             style = MaterialTheme.typography.titleSmall,
                             color = Color.White,
                             fontWeight = FontWeight.SemiBold
@@ -410,9 +565,9 @@ fun SauronCameraScreen(
                             camera?.cameraControl?.enableTorch(isFlashOn)
                         },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
-                            .background(Color.Black.copy(alpha = 0.5f))
+                            .background(Color.Black.copy(alpha = 0.6f))
                     ) {
                         Icon(
                             imageVector = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
@@ -425,9 +580,9 @@ fun SauronCameraScreen(
                     IconButton(
                         onClick = { isFrozen = !isFrozen },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .clip(CircleShape)
-                            .background(if (isFrozen) AmberGold.copy(alpha = 0.3f) else Color.Black.copy(alpha = 0.5f))
+                            .background(if (isFrozen) AmberGold.copy(alpha = 0.4f) else Color.Black.copy(alpha = 0.6f))
                     ) {
                         Icon(
                             imageVector = if (isFrozen) Icons.Default.PlayArrow else Icons.Default.Pause,
@@ -438,7 +593,7 @@ fun SauronCameraScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Target Language Selector Bar
             Row(
@@ -448,7 +603,7 @@ fun SauronCameraScreen(
             ) {
                 Text(
                     text = "Traduzir p/:",
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                     color = Color.LightGray
                 )
 
@@ -462,10 +617,11 @@ fun SauronCameraScreen(
                         val isSelected = targetLanguage.code == code
                         Surface(
                             shape = RoundedCornerShape(10.dp),
-                            color = if (isSelected) LavenderPrimary else Color.Black.copy(alpha = 0.5f),
+                            color = if (isSelected) LavenderPrimary else Color.Black.copy(alpha = 0.55f),
                             border = BorderStroke(1.dp, if (isSelected) LavenderPrimary else Color.White.copy(alpha = 0.3f)),
                             modifier = Modifier.clickable {
                                 targetLanguage = meta
+                                trackedWordsMap.clear() // Clear cache on language change
                             }
                         ) {
                             Row(
@@ -487,7 +643,7 @@ fun SauronCameraScreen(
             }
         }
 
-        // Bottom Results HUD Overlay
+        // 5. BOTTOM PERSISTENT RESULTS HUD
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -496,27 +652,26 @@ fun SauronCameraScreen(
                     Brush.verticalGradient(
                         colors = listOf(
                             Color.Transparent,
-                            Color.Black.copy(alpha = 0.75f),
-                            Color.Black.copy(alpha = 0.95f)
+                            Color.Black.copy(alpha = 0.8f),
+                            Color.Black.copy(alpha = 0.98f)
                         )
                     )
                 )
                 .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            // Live Detected & Translated Cards Preview
-            if (detectedItems.isNotEmpty()) {
+            if (activeVisibleWords.isNotEmpty()) {
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(180.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    color = SophisticatedSurface.copy(alpha = 0.92f),
+                        .height(150.dp),
+                    shape = RoundedCornerShape(18.dp),
+                    color = SophisticatedSurface.copy(alpha = 0.94f),
                     border = BorderStroke(1.dp, GlowLavender.copy(alpha = 0.6f))
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(12.dp)
+                            .padding(10.dp)
                     ) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -534,7 +689,7 @@ fun SauronCameraScreen(
                                         .background(EmeraldSuccess)
                                 )
                                 Text(
-                                    text = "${detectedItems.size} Blocos de Texto Detetados",
+                                    text = "${activeVisibleWords.size} Palavras/Frases Traduzidas",
                                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                                     fontWeight = FontWeight.Bold,
                                     color = Color.White
@@ -545,41 +700,41 @@ fun SauronCameraScreen(
                                 // Speak entire translation
                                 IconButton(
                                     onClick = {
-                                        val combined = detectedItems.joinToString(" ") { it.translatedText.ifBlank { it.originalText } }
+                                        val combined = activeVisibleWords.joinToString(" ") { it.translatedText }
                                         if (combined.isNotBlank()) {
                                             ttsManager.speak(combined, targetLanguage.code)
                                             Toast.makeText(context, "A ler tradução...", Toast.LENGTH_SHORT).show()
                                         }
                                     },
-                                    modifier = Modifier.size(30.dp)
+                                    modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.VolumeUp,
                                         contentDescription = "Ouvir",
                                         tint = LavenderPrimary,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
 
                                 // Copy all
                                 IconButton(
                                     onClick = {
-                                        val combined = detectedItems.joinToString("\n") {
-                                            "Original: ${it.originalText}\nTradução: ${it.translatedText}"
+                                        val combined = activeVisibleWords.joinToString("\n") {
+                                            "Original: ${it.originalText} -> Tradução: ${it.translatedText}"
                                         }
                                         if (combined.isNotBlank()) {
                                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                             clipboard.setPrimaryClip(ClipData.newPlainText("Olho de Sauron Tradução", combined))
-                                            Toast.makeText(context, "Texto copiado!", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(context, "Traduções copiadas!", Toast.LENGTH_SHORT).show()
                                         }
                                     },
-                                    modifier = Modifier.size(30.dp)
+                                    modifier = Modifier.size(28.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.Default.ContentCopy,
                                         contentDescription = "Copiar tudo",
                                         tint = TextSecondary,
-                                        modifier = Modifier.size(18.dp)
+                                        modifier = Modifier.size(16.dp)
                                     )
                                 }
                             }
@@ -588,61 +743,54 @@ fun SauronCameraScreen(
                         Spacer(modifier = Modifier.height(6.dp))
 
                         LazyColumn(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
                             modifier = Modifier.fillMaxSize()
                         ) {
-                            items(detectedItems) { item ->
+                            items(activeVisibleWords) { item ->
                                 Surface(
-                                    shape = RoundedCornerShape(12.dp),
+                                    shape = RoundedCornerShape(10.dp),
                                     color = SophisticatedSurfaceVariant.copy(alpha = 0.6f),
-                                    border = BorderStroke(0.8.dp, SophisticatedOutline.copy(alpha = 0.5f))
+                                    border = BorderStroke(0.6.dp, SophisticatedOutline.copy(alpha = 0.5f))
                                 ) {
-                                    Column(
+                                    Row(
                                         modifier = Modifier
                                             .fillMaxWidth()
-                                            .padding(10.dp)
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(
-                                            text = item.originalText,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Color.LightGray,
-                                            maxLines = 2,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-
-                                        Spacer(modifier = Modifier.height(4.dp))
-
-                                        Row(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
+                                        Column(modifier = Modifier.weight(1f)) {
                                             Text(
-                                                text = "${targetLanguage.flag} ${item.translatedText.ifBlank { item.originalText }}",
+                                                text = item.originalText,
+                                                style = MaterialTheme.typography.bodySmall.copy(fontSize = 11.sp),
+                                                color = Color.LightGray,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                            Text(
+                                                text = "${targetLanguage.flag} ${item.translatedText}",
                                                 style = MaterialTheme.typography.bodyMedium.copy(
                                                     fontWeight = FontWeight.Bold,
-                                                    fontSize = 14.sp
+                                                    fontSize = 13.sp
                                                 ),
                                                 color = GlowLavender,
-                                                modifier = Modifier.weight(1f)
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
                                             )
+                                        }
 
-                                            IconButton(
-                                                onClick = {
-                                                    ttsManager.speak(
-                                                        item.translatedText.ifBlank { item.originalText },
-                                                        targetLanguage.code
-                                                    )
-                                                },
-                                                modifier = Modifier.size(24.dp)
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.VolumeUp,
-                                                    contentDescription = "Ouvir",
-                                                    tint = LavenderPrimary,
-                                                    modifier = Modifier.size(15.dp)
-                                                )
-                                            }
+                                        IconButton(
+                                            onClick = {
+                                                ttsManager.speak(item.translatedText, targetLanguage.code)
+                                            },
+                                            modifier = Modifier.size(26.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.VolumeUp,
+                                                contentDescription = "Ouvir",
+                                                tint = LavenderPrimary,
+                                                modifier = Modifier.size(15.dp)
+                                            )
                                         }
                                     }
                                 }
@@ -654,13 +802,13 @@ fun SauronCameraScreen(
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
-                    color = Color.Black.copy(alpha = 0.7f),
+                    color = Color.Black.copy(alpha = 0.75f),
                     border = BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
@@ -668,30 +816,28 @@ fun SauronCameraScreen(
                             imageVector = Icons.Default.Visibility,
                             contentDescription = null,
                             tint = ListeningCoral,
-                            modifier = Modifier.size(22.dp)
+                            modifier = Modifier.size(20.dp)
                         )
                         Text(
-                            text = "Aponte a câmara para qualquer texto, cartaz ou livro para traduzir instantaneamente...",
-                            style = MaterialTheme.typography.bodySmall,
+                            text = "Aponte o retículo central para a palavra ou frase que deseja traduzir...",
+                            style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
                             color = Color.LightGray
                         )
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(10.dp))
         }
     }
 }
 
 @OptIn(ExperimentalGetImage::class)
-private fun processImageProxy(
+private fun processImageProxyFocused(
     imageProxy: ImageProxy,
     recognizer: com.google.mlkit.vision.text.TextRecognizer,
     targetLang: String,
     viewModel: TranscriberViewModel,
     scope: kotlinx.coroutines.CoroutineScope,
-    onDetected: (List<DetectedTextItem>) -> Unit
+    onNewWordsDetected: (List<SauronTrackedWord>) -> Unit
 ) {
     val mediaImage = imageProxy.image
     if (mediaImage == null) {
@@ -699,42 +845,71 @@ private fun processImageProxy(
         return
     }
 
-    val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+    val rotation = imageProxy.imageInfo.rotationDegrees
+    val image = InputImage.fromMediaImage(mediaImage, rotation)
+
+    val imageWidth = if (rotation == 90 || rotation == 270) imageProxy.height.toFloat() else imageProxy.width.toFloat()
+    val imageHeight = if (rotation == 90 || rotation == 270) imageProxy.width.toFloat() else imageProxy.height.toFloat()
+
     recognizer.process(image)
         .addOnSuccessListener { visionText ->
             val blocks = visionText.textBlocks
             if (blocks.isEmpty()) {
-                onDetected(emptyList())
                 imageProxy.close()
                 return@addOnSuccessListener
             }
 
             scope.launch(Dispatchers.IO) {
-                val items = mutableListOf<DetectedTextItem>()
-                for (block in blocks.take(6)) {
-                    val raw = block.text.trim()
-                    if (raw.length >= 2) {
-                        val detection = LanguageAutoDetector.detect(raw)
-                        val translationResult = viewModel.speechService.translateText(
-                            text = raw,
-                            sourceLang = detection.languageCode,
-                            targetLang = targetLang,
-                            apiKeyOverride = viewModel.customApiKey.value.ifBlank { null }
-                        )
-                        val translated = translationResult.getOrDefault(raw)
-                        items.add(
-                            DetectedTextItem(
-                                originalText = raw,
-                                translatedText = translated,
-                                boundingBox = block.boundingBox,
-                                sourceLang = detection.languageCode
-                            )
-                        )
+                val newWordsList = mutableListOf<SauronTrackedWord>()
+
+                // Focused scan area bounds: normalized [0.15 .. 0.85] width, [0.30 .. 0.62] height
+                val focusMinX = 0.14f
+                val focusMaxX = 0.86f
+                val focusMinY = 0.28f
+                val focusMaxY = 0.64f
+
+                for (block in blocks) {
+                    for (line in block.lines) {
+                        val box = line.boundingBox ?: continue
+                        val normLeft = (box.left / imageWidth).coerceIn(0f, 1f)
+                        val normTop = (box.top / imageHeight).coerceIn(0f, 1f)
+                        val normRight = (box.right / imageWidth).coerceIn(0f, 1f)
+                        val normBottom = (box.bottom / imageHeight).coerceIn(0f, 1f)
+
+                        val centerX = (normLeft + normRight) / 2f
+                        val centerY = (normTop + normBottom) / 2f
+
+                        // Only capture words whose center falls inside the central focus reticle!
+                        if (centerX in focusMinX..focusMaxX && centerY in focusMinY..focusMaxY) {
+                            val rawText = line.text.trim()
+                            if (rawText.length >= 2) {
+                                val detection = LanguageAutoDetector.detect(rawText)
+                                val translationResult = viewModel.speechService.translateText(
+                                    text = rawText,
+                                    sourceLang = detection.languageCode,
+                                    targetLang = targetLang,
+                                    apiKeyOverride = viewModel.customApiKey.value.ifBlank { null }
+                                )
+                                val translated = translationResult.getOrDefault(rawText)
+
+                                newWordsList.add(
+                                    SauronTrackedWord(
+                                        originalText = rawText,
+                                        translatedText = translated,
+                                        normLeft = normLeft,
+                                        normTop = normTop,
+                                        normRight = normRight,
+                                        normBottom = normBottom,
+                                        sourceLang = detection.languageCode
+                                    )
+                                )
+                            }
+                        }
                     }
                 }
 
                 withContext(Dispatchers.Main) {
-                    onDetected(items)
+                    onNewWordsDetected(newWordsList)
                 }
                 imageProxy.close()
             }

@@ -157,6 +157,36 @@ class TranscriberViewModel(application: Application) : AndroidViewModel(applicat
                 }
             }
         }
+
+        // Auto-translate discrete speech segments for two-column reverse live history
+        viewModelScope.launch {
+            liveSpeechManager.segments.collect { segs ->
+                for (seg in segs) {
+                    if (seg.translationPt.isBlank() && seg.text.isNotBlank()) {
+                        val lang = seg.detectedLang.ifBlank { liveSpeechManager.activeLanguage.value }
+                        if (lang.startsWith("pt", ignoreCase = true)) {
+                            liveSpeechManager.updateSegmentTranslation(seg.id, seg.text)
+                        } else {
+                            viewModelScope.launch {
+                                val res = speechService.translateTextToPortuguese(
+                                    text = seg.text,
+                                    sourceLang = lang,
+                                    apiKeyOverride = _customApiKey.value.ifBlank { null }
+                                )
+                                res.fold(
+                                    onSuccess = { translated ->
+                                        liveSpeechManager.updateSegmentTranslation(seg.id, translated)
+                                    },
+                                    onFailure = {
+                                        liveSpeechManager.updateSegmentTranslation(seg.id, seg.text)
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun translateLiveTranscript(text: String, langCode: String? = null) {

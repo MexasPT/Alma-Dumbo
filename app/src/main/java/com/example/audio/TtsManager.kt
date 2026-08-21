@@ -31,43 +31,91 @@ data class VoiceProfile(
 )
 
 object VoicePresets {
-    val MASCULINE_1 = VoiceProfile(
-        id = "masc_1",
-        name = "Masculino 1",
-        subtitle = "Grave, Firme & Autoritário",
-        gender = VoiceGender.MASCULINE,
-        pitch = 0.82f,
-        speechRate = 0.96f
-    )
-
-    val MASCULINE_2 = VoiceProfile(
-        id = "masc_2",
-        name = "Masculino 2",
-        subtitle = "Natural, Fluido & Dinâmico",
-        gender = VoiceGender.MASCULINE,
-        pitch = 1.05f,
-        speechRate = 1.06f
-    )
-
+    // 4 VOZES FEMININAS
     val FEMININE_1 = VoiceProfile(
         id = "fem_1",
-        name = "Feminino 1",
+        name = "Feminino 1 (Sofia)",
         subtitle = "Clara, Suave & Melódica",
         gender = VoiceGender.FEMININE,
-        pitch = 1.25f,
-        speechRate = 1.00f
+        pitch = 1.15f,
+        speechRate = 1.00f,
+        sampleText = "Olá! Eu sou a Sofia. Esta é a minha voz feminina clara e melodiosa no Olho do Dumbo."
     )
 
     val FEMININE_2 = VoiceProfile(
         id = "fem_2",
-        name = "Feminino 2",
-        subtitle = "Jovial, Expressiva & Rápida",
+        name = "Feminino 2 (Inês)",
+        subtitle = "Jovial, Expressiva & Dinâmica",
         gender = VoiceGender.FEMININE,
-        pitch = 1.45f,
-        speechRate = 1.15f
+        pitch = 1.38f,
+        speechRate = 1.10f,
+        sampleText = "Olá! Eu sou a Inês. Esta é a minha voz feminina jovial e enérgica."
     )
 
-    val ALL = listOf(MASCULINE_1, MASCULINE_2, FEMININE_1, FEMININE_2)
+    val FEMININE_3 = VoiceProfile(
+        id = "fem_3",
+        name = "Feminino 3 (Beatriz)",
+        subtitle = "Serena, Elegante & Pausada",
+        gender = VoiceGender.FEMININE,
+        pitch = 1.22f,
+        speechRate = 0.92f,
+        sampleText = "Olá! Eu sou a Beatriz. Esta é a minha voz feminina serena e elegante."
+    )
+
+    val FEMININE_4 = VoiceProfile(
+        id = "fem_4",
+        name = "Feminino 4 (Matilde)",
+        subtitle = "Vibrante, Calorosa & Aguda",
+        gender = VoiceGender.FEMININE,
+        pitch = 1.52f,
+        speechRate = 1.05f,
+        sampleText = "Olá! Eu sou a Matilde. Esta é a minha voz feminina vibrante e luminosa."
+    )
+
+    // 4 VOZES MASCULINAS
+    val MASCULINE_1 = VoiceProfile(
+        id = "masc_1",
+        name = "Masculino 1 (Rodrigo)",
+        subtitle = "Muito Grave, Firme & Profundo",
+        gender = VoiceGender.MASCULINE,
+        pitch = 0.62f,
+        speechRate = 0.94f,
+        sampleText = "Olá! Eu sou o Rodrigo. Esta é a minha voz masculina grave e profunda no Olho do Dumbo."
+    )
+
+    val MASCULINE_2 = VoiceProfile(
+        id = "masc_2",
+        name = "Masculino 2 (Tiago)",
+        subtitle = "Natural, Fluido & Equilibrado",
+        gender = VoiceGender.MASCULINE,
+        pitch = 0.78f,
+        speechRate = 1.02f,
+        sampleText = "Olá! Eu sou o Tiago. Esta é a minha voz masculina natural e fluida."
+    )
+
+    val MASCULINE_3 = VoiceProfile(
+        id = "masc_3",
+        name = "Masculino 3 (Afonso)",
+        subtitle = "Pausado, Sério & Autoritário",
+        gender = VoiceGender.MASCULINE,
+        pitch = 0.68f,
+        speechRate = 0.88f,
+        sampleText = "Olá! Eu sou o Afonso. Esta é a minha voz masculina séria e pausada."
+    )
+
+    val MASCULINE_4 = VoiceProfile(
+        id = "masc_4",
+        name = "Masculino 4 (Diogo)",
+        subtitle = "Jovem, Enérgico & Rápido",
+        gender = VoiceGender.MASCULINE,
+        pitch = 0.86f,
+        speechRate = 1.12f,
+        sampleText = "Olá! Eu sou o Diogo. Esta é a minha voz masculina jovem e dinâmica."
+    )
+
+    val FEMININE_VOICES = listOf(FEMININE_1, FEMININE_2, FEMININE_3, FEMININE_4)
+    val MASCULINE_VOICES = listOf(MASCULINE_1, MASCULINE_2, MASCULINE_3, MASCULINE_4)
+    val ALL = FEMININE_VOICES + MASCULINE_VOICES
 
     fun findById(id: String): VoiceProfile {
         return ALL.firstOrNull { it.id == id } ?: FEMININE_1
@@ -145,15 +193,22 @@ class TtsManager(private val context: Context) : TextToSpeech.OnInitListener {
             try {
                 val availableVoices = tts.voices
                 if (!availableVoices.isNullOrEmpty()) {
-                    val matchingVoice = availableVoices.firstOrNull { voice ->
+                    val matchingVoices = availableVoices.filter { voice ->
                         val vName = voice.name.lowercase()
                         when (profile.gender) {
-                            VoiceGender.MASCULINE -> vName.contains("male") && !vName.contains("female")
-                            VoiceGender.FEMININE -> vName.contains("female") || vName.contains("fem")
+                            VoiceGender.MASCULINE -> (vName.contains("male") || vName.contains("ptm") || vName.contains("-m-") || vName.contains("man")) && !vName.contains("female")
+                            VoiceGender.FEMININE -> vName.contains("female") || vName.contains("fem") || vName.contains("ptf") || vName.contains("-f-") || vName.contains("woman")
                         }
                     }
-                    if (matchingVoice != null) {
-                        tts.voice = matchingVoice
+                    if (matchingVoices.isNotEmpty()) {
+                        val index = when (profile.id) {
+                            "fem_1", "masc_1" -> 0
+                            "fem_2", "masc_2" -> 1
+                            "fem_3", "masc_3" -> 2
+                            "fem_4", "masc_4" -> 3
+                            else -> 0
+                        } % matchingVoices.size
+                        tts.voice = matchingVoices[index]
                     }
                 }
             } catch (e: Exception) {
